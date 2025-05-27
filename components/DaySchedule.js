@@ -1,35 +1,105 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const ExerciseGroup = ({ title, exercises, time }) => (
-  <View style={styles.exerciseGroup}>
-    <View style={styles.groupHeader}>
-      <Text style={styles.groupTitle}>{title}</Text>
-      <View style={styles.exerciseCount}>
-        <Text style={styles.exerciseCountText}>{exercises.length} Exercises</Text>
+const ExerciseItem = ({ exercise, onComplete, isCompleted }) => (
+  <TouchableOpacity 
+    style={[styles.exerciseItem, isCompleted && styles.exerciseItemCompleted]}
+    onPress={() => onComplete(exercise.id)}
+    activeOpacity={0.7}
+  >
+    <View style={styles.exerciseHeader}>
+      <Text style={[styles.exerciseName, isCompleted && styles.exerciseNameCompleted]}>
+        {exercise.name}
+      </Text>
+      <View style={[styles.checkBox, isCompleted && styles.checkBoxCompleted]}>
+        {isCompleted && (
+          <MaterialCommunityIcons name="check" size={16} color="#fff" />
+        )}
       </View>
     </View>
-    <View style={styles.exerciseList}>
-      {exercises.map((exercise, index) => (
-        <View key={index} style={styles.exerciseItem}>
-          <Text style={styles.exerciseName}>{exercise.name}</Text>
-          <Text style={styles.exerciseDetails}>
-            {exercise.sets} sets of {exercise.reps} reps
-          </Text>
-        </View>
-      ))}
-    </View>
-  </View>
+    <Text style={[styles.exerciseDetails, isCompleted && styles.exerciseDetailsCompleted]}>
+      {exercise.sets} sets of {exercise.reps} reps
+    </Text>
+  </TouchableOpacity>
 );
 
-const DaySchedule = ({ selectedDay }) => {
+const ExerciseGroup = ({ workout, workoutProgress, onExerciseComplete, onWorkoutComplete }) => {
+  const completedExercises = workout.exercises.filter(ex => workoutProgress[ex.id]).length;
+  const totalExercises = workout.exercises.length;
+  const isWorkoutCompleted = completedExercises === totalExercises && totalExercises > 0;
+  const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
+
+  const handleExerciseComplete = (exerciseId) => {
+    if (!workoutProgress[exerciseId]) {
+      onExerciseComplete(exerciseId);
+      
+      // Check if this completes the workout
+      const newCompletedCount = completedExercises + 1;
+      if (newCompletedCount === totalExercises) {
+        setTimeout(() => {
+          onWorkoutComplete(workout.id);
+        }, 500);
+      }
+    }
+  };
+
+  return (
+    <View style={[styles.exerciseGroup, isWorkoutCompleted && styles.exerciseGroupCompleted]}>
+      <View style={styles.groupHeader}>
+        <View style={styles.groupTitleContainer}>
+          <Text style={styles.groupTitle}>{workout.group}</Text>
+          <Text style={styles.groupDuration}>{workout.duration} min</Text>
+        </View>
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${progressPercentage}%` }
+              ]} 
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {completedExercises}/{totalExercises}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.exerciseList}>
+        {workout.exercises.map((exercise, index) => (
+          <ExerciseItem
+            key={exercise.id}
+            exercise={exercise}
+            onComplete={handleExerciseComplete}
+            isCompleted={workoutProgress[exercise.id]}
+          />
+        ))}
+      </View>
+      
+      {isWorkoutCompleted && (
+        <View style={styles.completedBadge}>
+          <MaterialCommunityIcons name="trophy" size={20} color="#FFD700" />
+          <Text style={styles.completedText}>Workout Complete!</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onExerciseComplete }) => {
+  const [timerActive, setTimerActive] = useState(false);
+  const [currentTimer, setCurrentTimer] = useState(0);
+
   if (!selectedDay) {
     return (
       <View style={styles.container}>
         <Text style={styles.sectionTitle}>The Current</Text>
         <Text style={styles.title}>Day Schedule</Text>
         <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="calendar-clock" size={64} color="#ddd" />
           <Text style={styles.emptyStateText}>Select a day to view schedule</Text>
+          <Text style={styles.emptyStateSubtext}>Choose any day from the week above</Text>
         </View>
         
         {/* Additional content for scrolling demo */}
@@ -64,6 +134,7 @@ const DaySchedule = ({ selectedDay }) => {
         <Text style={styles.sectionTitle}>The Current</Text>
         <Text style={styles.title}>Day Schedule</Text>
         <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="sleep" size={64} color="#4CAF50" />
           <Text style={styles.emptyStateText}>Rest Day</Text>
           <Text style={styles.emptyStateSubtext}>Take time to recover and recharge!</Text>
         </View>
@@ -92,19 +163,41 @@ const DaySchedule = ({ selectedDay }) => {
     );
   }
 
+  // Calculate overall progress for the day
+  const totalExercises = workouts.reduce((sum, workout) => sum + workout.exercises.length, 0);
+  const completedExercises = workouts.reduce((sum, workout) => 
+    sum + workout.exercises.filter(ex => workoutProgress[ex.id]).length, 0
+  );
+  const dayProgress = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>The Current</Text>
-      <Text style={styles.title}>Day Schedule</Text>
+      <View style={styles.dayHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>The Current</Text>
+          <Text style={styles.title}>Day Schedule</Text>
+        </View>
+        <View style={styles.dayProgressContainer}>
+          <Text style={styles.dayProgressText}>{Math.round(dayProgress)}%</Text>
+          <Text style={styles.dayProgressLabel}>Complete</Text>
+        </View>
+      </View>
+      
       <View style={styles.timeline}>
-        {workouts.map((block, index) => (
-          <View key={index} style={styles.timeBlock}>
-            <Text style={styles.timeText}>{block.time}</Text>
-            <ExerciseGroup
-              title={block.group}
-              exercises={block.exercises}
-              time={block.time}
-            />
+        {workouts.map((workout, index) => (
+          <View key={workout.id} style={styles.timeBlock}>
+            <View style={styles.timeContainer}>
+              <Text style={styles.timeText}>{workout.time}</Text>
+              <View style={styles.timeLine} />
+            </View>
+            <View style={styles.workoutContainer}>
+              <ExerciseGroup
+                workout={workout}
+                workoutProgress={workoutProgress}
+                onExerciseComplete={onExerciseComplete}
+                onWorkoutComplete={onWorkoutComplete}
+              />
+            </View>
           </View>
         ))}
       </View>
@@ -142,79 +235,194 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100, // Extra padding for scrolling
   },
+  dayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 16,
     color: '#666',
-    textAlign: 'center',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
+  },
+  dayProgressContainer: {
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 80,
+  },
+  dayProgressText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  dayProgressLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   timeline: {
     paddingTop: 16,
   },
   timeBlock: {
+    flexDirection: 'row',
     marginBottom: 24,
   },
+  timeContainer: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 60,
+  },
   timeText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
+    fontWeight: '600',
     marginBottom: 8,
+  },
+  timeLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 1,
+  },
+  workoutContainer: {
+    flex: 1,
   },
   exerciseGroup: {
     backgroundColor: '#f5f5f5',
     borderRadius: 12,
     padding: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  exerciseGroupCompleted: {
+    backgroundColor: '#e8f5e8',
+    borderColor: '#4CAF50',
   },
   groupHeader: {
+    marginBottom: 16,
+  },
+  groupTitleContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   groupTitle: {
     fontSize: 18,
     fontWeight: 'bold',
   },
-  exerciseCount: {
-    backgroundColor: '#000',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  exerciseCountText: {
-    color: '#fff',
+  groupDuration: {
     fontSize: 14,
+    color: '#666',
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  progressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    minWidth: 30,
   },
   exerciseList: {
-    gap: 12,
+    gap: 8,
   },
   exerciseItem: {
     backgroundColor: '#fff',
     padding: 12,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  exerciseItemCompleted: {
+    backgroundColor: '#f0f8f0',
+    borderColor: '#4CAF50',
+  },
+  exerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   exerciseName: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 4,
+    flex: 1,
+  },
+  exerciseNameCompleted: {
+    color: '#4CAF50',
+    textDecorationLine: 'line-through',
   },
   exerciseDetails: {
     fontSize: 14,
     color: '#666',
   },
+  exerciseDetailsCompleted: {
+    color: '#4CAF50',
+  },
+  checkBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkBoxCompleted: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    gap: 8,
+  },
+  completedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
+    paddingVertical: 48,
   },
   emptyStateText: {
     fontSize: 18,
     color: '#666',
     marginBottom: 8,
+    marginTop: 16,
   },
   emptyStateSubtext: {
     fontSize: 14,
@@ -276,4 +484,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DaySchedule; 
+export default DaySchedule;

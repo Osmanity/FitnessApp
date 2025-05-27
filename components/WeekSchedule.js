@@ -167,101 +167,131 @@ const generateWeekData = (weekOffset = 0) => {
   const workoutTemplates = {
     monday: [
       {
+        id: 'monday-1',
         time: '20:00',
         group: 'Chest',
+        duration: 45,
+        completed: false,
         exercises: [
-          { name: 'Bench Press', sets: 4, reps: 8 },
-          { name: 'Incline Press', sets: 3, reps: 10 },
-          { name: 'Chest Flyes', sets: 3, reps: 12 },
+          { id: 'chest-1', name: 'Bench Press', sets: 4, reps: 8, completed: false },
+          { id: 'chest-2', name: 'Incline Press', sets: 3, reps: 10, completed: false },
+          { id: 'chest-3', name: 'Chest Flyes', sets: 3, reps: 12, completed: false },
         ],
       },
       {
+        id: 'monday-2',
         time: '21:00',
         group: 'Triceps',
+        duration: 30,
+        completed: false,
         exercises: [
-          { name: 'Tricep Pushdowns', sets: 3, reps: 12 },
-          { name: 'Skull Crushers', sets: 3, reps: 10 },
-          { name: 'Overhead Extensions', sets: 3, reps: 12 },
+          { id: 'triceps-1', name: 'Tricep Pushdowns', sets: 3, reps: 12, completed: false },
+          { id: 'triceps-2', name: 'Skull Crushers', sets: 3, reps: 10, completed: false },
+          { id: 'triceps-3', name: 'Overhead Extensions', sets: 3, reps: 12, completed: false },
         ],
       }
     ],
     tuesday: [
       {
+        id: 'tuesday-1',
         time: '19:30',
         group: 'Back',
+        duration: 50,
+        completed: false,
         exercises: [
-          { name: 'Pull-Ups', sets: 4, reps: 8 },
-          { name: 'Barbell Rows', sets: 3, reps: 10 },
-          { name: 'Lat Pulldowns', sets: 3, reps: 12 },
+          { id: 'back-1', name: 'Pull-Ups', sets: 4, reps: 8, completed: false },
+          { id: 'back-2', name: 'Barbell Rows', sets: 3, reps: 10, completed: false },
+          { id: 'back-3', name: 'Lat Pulldowns', sets: 3, reps: 12, completed: false },
         ],
       },
       {
+        id: 'tuesday-2',
         time: '20:30',
         group: 'Biceps',
+        duration: 25,
+        completed: false,
         exercises: [
-          { name: 'Barbell Curls', sets: 3, reps: 12 },
-          { name: 'Hammer Curls', sets: 3, reps: 12 },
-          { name: 'Preacher Curls', sets: 3, reps: 10 },
+          { id: 'biceps-1', name: 'Barbell Curls', sets: 3, reps: 12, completed: false },
+          { id: 'biceps-2', name: 'Hammer Curls', sets: 3, reps: 12, completed: false },
+          { id: 'biceps-3', name: 'Preacher Curls', sets: 3, reps: 10, completed: false },
         ],
       }
     ],
     thursday: [
       {
+        id: 'thursday-1',
         time: '20:00',
         group: 'Shoulders',
+        duration: 40,
+        completed: false,
         exercises: [
-          { name: 'Military Press', sets: 4, reps: 8 },
-          { name: 'Lateral Raises', sets: 3, reps: 12 },
-          { name: 'Front Raises', sets: 3, reps: 12 },
+          { id: 'shoulders-1', name: 'Military Press', sets: 4, reps: 8, completed: false },
+          { id: 'shoulders-2', name: 'Lateral Raises', sets: 3, reps: 12, completed: false },
+          { id: 'shoulders-3', name: 'Front Raises', sets: 3, reps: 12, completed: false },
         ],
       },
       {
+        id: 'thursday-2',
         time: '21:00',
         group: 'Traps',
+        duration: 20,
+        completed: false,
         exercises: [
-          { name: 'Shrugs', sets: 3, reps: 15 },
-          { name: 'Upright Rows', sets: 3, reps: 12 },
-          { name: 'Face Pulls', sets: 3, reps: 15 },
+          { id: 'traps-1', name: 'Shrugs', sets: 3, reps: 15, completed: false },
+          { id: 'traps-2', name: 'Upright Rows', sets: 3, reps: 12, completed: false },
+          { id: 'traps-3', name: 'Face Pulls', sets: 3, reps: 15, completed: false },
         ],
       }
     ],
     saturday: [
       {
+        id: 'saturday-1',
         time: '19:00',
         group: 'Legs',
+        duration: 60,
+        completed: false,
         exercises: [
-          { name: 'Squats', sets: 4, reps: 8 },
-          { name: 'Leg Press', sets: 3, reps: 12 },
-          { name: 'Romanian Deadlifts', sets: 3, reps: 10 },
+          { id: 'legs-1', name: 'Squats', sets: 4, reps: 8, completed: false },
+          { id: 'legs-2', name: 'Leg Press', sets: 3, reps: 12, completed: false },
+          { id: 'legs-3', name: 'Romanian Deadlifts', sets: 3, reps: 10, completed: false },
         ],
       },
       {
+        id: 'saturday-2',
         time: '20:00',
         group: 'Calves',
+        duration: 15,
+        completed: false,
         exercises: [
-          { name: 'Standing Calf Raises', sets: 4, reps: 15 },
-          { name: 'Seated Calf Raises', sets: 3, reps: 20 },
-          { name: 'Leg Press Calf Raises', sets: 3, reps: 15 },
+          { id: 'calves-1', name: 'Standing Calf Raises', sets: 4, reps: 15, completed: false },
+          { id: 'calves-2', name: 'Seated Calf Raises', sets: 3, reps: 20, completed: false },
+          { id: 'calves-3', name: 'Leg Press Calf Raises', sets: 3, reps: 15, completed: false },
         ],
       }
     ],
     sunday: [
       {
+        id: 'sunday-1',
         time: '20:00',
         group: 'Core',
+        duration: 30,
+        completed: false,
         exercises: [
-          { name: 'Planks', sets: 3, reps: 60 },
-          { name: 'Russian Twists', sets: 3, reps: 20 },
-          { name: 'Leg Raises', sets: 3, reps: 15 },
+          { id: 'core-1', name: 'Planks', sets: 3, reps: 60, completed: false },
+          { id: 'core-2', name: 'Russian Twists', sets: 3, reps: 20, completed: false },
+          { id: 'core-3', name: 'Leg Raises', sets: 3, reps: 15, completed: false },
         ],
       },
       {
+        id: 'sunday-2',
         time: '21:00',
         group: 'Arms',
+        duration: 25,
+        completed: false,
         exercises: [
-          { name: 'Superset Curls', sets: 3, reps: 12 },
-          { name: 'Tricep Extensions', sets: 3, reps: 12 },
-          { name: 'Forearm Curls', sets: 3, reps: 15 },
+          { id: 'arms-1', name: 'Superset Curls', sets: 3, reps: 12, completed: false },
+          { id: 'arms-2', name: 'Tricep Extensions', sets: 3, reps: 12, completed: false },
+          { id: 'arms-3', name: 'Forearm Curls', sets: 3, reps: 15, completed: false },
         ],
       }
     ]
