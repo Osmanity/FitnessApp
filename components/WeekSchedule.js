@@ -2,6 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+/**
+ * WeekSchedule Component
+ * 
+ * This component displays a weekly schedule that can be rendered in two modes:
+ * - Normal mode: Full week view with detailed information
+ * - Compact mode: Condensed week view for sticky headers
+ * 
+ * Scroll Synchronization:
+ * Both modes can be synchronized so that when one is swiped, the other follows.
+ * This is achieved through:
+ * - currentScrollIndex: The current week index (0-4, where 2 is the center/current week)
+ * - onScrollChange: Callback fired when user scrolls to notify parent of index change
+ * - scrollToIndex: External command to scroll to a specific index
+ */
+
 const DayItem = ({ day, date, hasWorkout, isRest, isSelected, isToday, onPress }) => (
   <TouchableOpacity 
     style={[
@@ -65,6 +80,23 @@ const getWeekNumber = (date) => {
 };
 
 const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = false }) => {
+  if (isCompact) {
+    return (
+      <View style={styles.compactWeekContainer}>
+        <View style={styles.compactDaysWrapper}>
+          {days.map((item, index) => (
+            <CompactDayItem 
+              key={index} 
+              {...item} 
+              isSelected={selectedDate === item.fullDate?.toDateString()}
+              onPress={() => onDaySelect(item)}
+            />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   let weekText = 'Current';
   let weekTextColor = '#000';
   if (weekOffset < 0) {
@@ -77,29 +109,6 @@ const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = fal
 
   const firstDayOfWeek = days[0].fullDate;
   const weekNumber = getWeekNumber(firstDayOfWeek);
-
-  if (isCompact) {
-    return (
-      <View style={styles.compactWeekContainer}>
-        <View style={styles.compactHeader}>
-          <Text style={styles.compactWeekText}>W{weekNumber}</Text>
-          <View style={[styles.compactStatusBadge, { backgroundColor: weekTextColor === '#000' ? '#E8F3FF' : '#F5F5F5' }]}>
-            <Text style={[styles.compactStatusText, { color: weekTextColor }]}>{weekText}</Text>
-          </View>
-        </View>
-        <View style={styles.compactDaysWrapper}>
-          {days.map((item, index) => (
-            <CompactDayItem 
-              key={index} 
-              {...item} 
-              isSelected={selectedDate === item.date}
-              onPress={() => onDaySelect(item)}
-            />
-          ))}
-        </View>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.weekContainer}>
@@ -119,7 +128,7 @@ const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = fal
           <DayItem 
             key={index} 
             {...item} 
-            isSelected={selectedDate === item.date}
+            isSelected={selectedDate === item.fullDate?.toDateString()}
             onPress={() => onDaySelect(item)}
           />
         ))}
@@ -156,223 +165,335 @@ const CompactDayItem = ({ day, date, hasWorkout, isRest, isSelected, isToday, on
   </TouchableOpacity>
 );
 
-const generateWeekData = (weekOffset = 0) => {
-  const today = new Date();
-  const startOfWeek = new Date(today);
-  const currentDay = startOfWeek.getDay();
-  const diff = currentDay === 0 ? -6 : 1 - currentDay;
-  startOfWeek.setDate(startOfWeek.getDate() + diff + (weekOffset * 7));
-
-  // Workout templates for different days
-  const workoutTemplates = {
-    monday: [
-      {
-        id: 'monday-1',
-        time: '20:00',
-        group: 'Chest',
-        duration: 45,
-        completed: false,
-        exercises: [
-          { id: 'chest-1', name: 'Bench Press', sets: 4, reps: 8, completed: false },
-          { id: 'chest-2', name: 'Incline Press', sets: 3, reps: 10, completed: false },
-          { id: 'chest-3', name: 'Chest Flyes', sets: 3, reps: 12, completed: false },
-        ],
-      },
-      {
-        id: 'monday-2',
-        time: '21:00',
-        group: 'Triceps',
-        duration: 30,
-        completed: false,
-        exercises: [
-          { id: 'triceps-1', name: 'Tricep Pushdowns', sets: 3, reps: 12, completed: false },
-          { id: 'triceps-2', name: 'Skull Crushers', sets: 3, reps: 10, completed: false },
-          { id: 'triceps-3', name: 'Overhead Extensions', sets: 3, reps: 12, completed: false },
-        ],
-      }
-    ],
-    tuesday: [
-      {
-        id: 'tuesday-1',
-        time: '19:30',
-        group: 'Back',
-        duration: 50,
-        completed: false,
-        exercises: [
-          { id: 'back-1', name: 'Pull-Ups', sets: 4, reps: 8, completed: false },
-          { id: 'back-2', name: 'Barbell Rows', sets: 3, reps: 10, completed: false },
-          { id: 'back-3', name: 'Lat Pulldowns', sets: 3, reps: 12, completed: false },
-        ],
-      },
-      {
-        id: 'tuesday-2',
-        time: '20:30',
-        group: 'Biceps',
-        duration: 25,
-        completed: false,
-        exercises: [
-          { id: 'biceps-1', name: 'Barbell Curls', sets: 3, reps: 12, completed: false },
-          { id: 'biceps-2', name: 'Hammer Curls', sets: 3, reps: 12, completed: false },
-          { id: 'biceps-3', name: 'Preacher Curls', sets: 3, reps: 10, completed: false },
-        ],
-      }
-    ],
-    thursday: [
-      {
-        id: 'thursday-1',
-        time: '20:00',
-        group: 'Shoulders',
-        duration: 40,
-        completed: false,
-        exercises: [
-          { id: 'shoulders-1', name: 'Military Press', sets: 4, reps: 8, completed: false },
-          { id: 'shoulders-2', name: 'Lateral Raises', sets: 3, reps: 12, completed: false },
-          { id: 'shoulders-3', name: 'Front Raises', sets: 3, reps: 12, completed: false },
-        ],
-      },
-      {
-        id: 'thursday-2',
-        time: '21:00',
-        group: 'Traps',
-        duration: 20,
-        completed: false,
-        exercises: [
-          { id: 'traps-1', name: 'Shrugs', sets: 3, reps: 15, completed: false },
-          { id: 'traps-2', name: 'Upright Rows', sets: 3, reps: 12, completed: false },
-          { id: 'traps-3', name: 'Face Pulls', sets: 3, reps: 15, completed: false },
-        ],
-      }
-    ],
-    saturday: [
-      {
-        id: 'saturday-1',
-        time: '19:00',
-        group: 'Legs',
-        duration: 60,
-        completed: false,
-        exercises: [
-          { id: 'legs-1', name: 'Squats', sets: 4, reps: 8, completed: false },
-          { id: 'legs-2', name: 'Leg Press', sets: 3, reps: 12, completed: false },
-          { id: 'legs-3', name: 'Romanian Deadlifts', sets: 3, reps: 10, completed: false },
-        ],
-      },
-      {
-        id: 'saturday-2',
-        time: '20:00',
-        group: 'Calves',
-        duration: 15,
-        completed: false,
-        exercises: [
-          { id: 'calves-1', name: 'Standing Calf Raises', sets: 4, reps: 15, completed: false },
-          { id: 'calves-2', name: 'Seated Calf Raises', sets: 3, reps: 20, completed: false },
-          { id: 'calves-3', name: 'Leg Press Calf Raises', sets: 3, reps: 15, completed: false },
-        ],
-      }
-    ],
-    sunday: [
-      {
-        id: 'sunday-1',
-        time: '20:00',
-        group: 'Core',
-        duration: 30,
-        completed: false,
-        exercises: [
-          { id: 'core-1', name: 'Planks', sets: 3, reps: 60, completed: false },
-          { id: 'core-2', name: 'Russian Twists', sets: 3, reps: 20, completed: false },
-          { id: 'core-3', name: 'Leg Raises', sets: 3, reps: 15, completed: false },
-        ],
-      },
-      {
-        id: 'sunday-2',
-        time: '21:00',
-        group: 'Arms',
-        duration: 25,
-        completed: false,
-        exercises: [
-          { id: 'arms-1', name: 'Superset Curls', sets: 3, reps: 12, completed: false },
-          { id: 'arms-2', name: 'Tricep Extensions', sets: 3, reps: 12, completed: false },
-          { id: 'arms-3', name: 'Forearm Curls', sets: 3, reps: 15, completed: false },
-        ],
-      }
-    ]
-  };
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(startOfWeek);
-    date.setDate(startOfWeek.getDate() + index);
-    const isToday = date.toDateString() === today.toDateString();
-    const dayIndex = (date.getDay() + 6) % 7;
-    const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-    // Map day index to workout template
-    let workouts = [];
-    if (dayIndex === 0) workouts = workoutTemplates.monday;
-    else if (dayIndex === 1) workouts = workoutTemplates.tuesday;
-    else if (dayIndex === 3) workouts = workoutTemplates.thursday;
-    else if (dayIndex === 5) workouts = workoutTemplates.saturday;
-    else if (dayIndex === 6) workouts = workoutTemplates.sunday;
-
-    return {
-      day: dayNames[dayIndex],
-      date: date.getDate().toString(),
-      hasWorkout: ![2, 4].includes(dayIndex),
-      isRest: [2, 4].includes(dayIndex),
-      isToday,
-      fullDate: date,
-      workouts
-    };
-  });
-};
-
-const WeekSchedule = ({ onDaySelect, selectedDate, isCompact = false }) => {
+const WeekSchedule = ({ 
+  onDaySelect, 
+  selectedDate, 
+  isCompact = false,
+  currentScrollIndex = 2,
+  onScrollChange,
+  scrollToIndex,
+  externalWorkoutDays
+}) => {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
-  const [visibleWeekIndex, setVisibleWeekIndex] = useState(2);
   const scrollViewRef = useRef(null);
+  const compactScrollViewRef = useRef(null);
   const screenWidth = Dimensions.get('window').width;
   const weekWidth = screenWidth;
+  const isInitialized = useRef(false);
+  const lastScrollIndex = useRef(2); // Track the last scroll position
 
-  const weeks = [
-    generateWeekData(currentWeekOffset - 2),
-    generateWeekData(currentWeekOffset - 1),
-    generateWeekData(currentWeekOffset),
-    generateWeekData(currentWeekOffset + 1),
-    generateWeekData(currentWeekOffset + 2),
-  ];
+  // Define the fixed week range
+  const minWeekOffset = -2;
+  const maxWeekOffset = 2;
+  const totalWeeks = maxWeekOffset - minWeekOffset + 1; // 5 weeks total
 
-  const currentWeekIndex = weeks.findIndex(week => 
-    week.some(day => day.isToday)
-  );
-
-  useEffect(() => {
-    if (scrollViewRef.current && currentWeekIndex !== -1 && !isCompact) {
-      setTimeout(() => {
-        scrollViewRef.current.scrollTo({
-          x: currentWeekIndex * weekWidth,
-          animated: false
-        });
-      }, 100);
+  // Generate weeks from external data if provided
+  const generateWeeksFromExternalData = () => {
+    if (!externalWorkoutDays || externalWorkoutDays.length === 0) {
+      return [];
     }
-  }, [isCompact]);
 
-  const handleScroll = (event) => {
+    const weeks = [];
+    const today = new Date();
+    
+    // Group external workout days by week
+    for (let weekOffset = minWeekOffset; weekOffset <= maxWeekOffset; weekOffset++) {
+      const startOfWeek = new Date(today);
+      const currentDay = startOfWeek.getDay();
+      const diff = currentDay === 0 ? -6 : 1 - currentDay;
+      startOfWeek.setDate(startOfWeek.getDate() + diff + (weekOffset * 7));
+      
+      const weekDays = [];
+      
+      // Get 7 days for this week
+      for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+        const targetDate = new Date(startOfWeek);
+        targetDate.setDate(startOfWeek.getDate() + dayIndex);
+        
+        // Find matching day in external data
+        const matchingDay = externalWorkoutDays.find(day => 
+          day.fullDate.toDateString() === targetDate.toDateString()
+        );
+        
+        if (matchingDay) {
+          weekDays.push(matchingDay);
+        } else {
+          // Create a fallback day if not found
+          const dayOfWeek = (targetDate.getDay() + 6) % 7;
+          const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+          const isToday = targetDate.toDateString() === today.toDateString();
+          
+          weekDays.push({
+            day: dayNames[dayOfWeek],
+            date: targetDate.getDate().toString(),
+            hasWorkout: ![2, 4].includes(dayOfWeek),
+            isRest: [2, 4].includes(dayOfWeek),
+            isToday,
+            fullDate: targetDate,
+            workouts: []
+          });
+        }
+      }
+      
+      weeks.push(weekDays);
+    }
+    
+    return weeks;
+  };
+
+  // Generate a single week's data based on offset (fallback when no external data)
+  const generateSingleWeek = (offset = 0) => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    const currentDay = startOfWeek.getDay();
+    const diff = currentDay === 0 ? -6 : 1 - currentDay;
+    startOfWeek.setDate(startOfWeek.getDate() + diff + (offset * 7));
+
+    // Workout templates for different days
+    const workoutTemplates = {
+      monday: [
+        {
+          id: `monday-1-${offset}`,
+          time: '20:00',
+          group: 'Chest',
+          duration: 45,
+          completed: false,
+          exercises: [
+            { id: `chest-1-${offset}`, name: 'Bench Press', sets: 4, reps: 8, completed: false },
+            { id: `chest-2-${offset}`, name: 'Incline Press', sets: 3, reps: 10, completed: false },
+            { id: `chest-3-${offset}`, name: 'Chest Flyes', sets: 3, reps: 12, completed: false },
+          ],
+        },
+        {
+          id: `monday-2-${offset}`,
+          time: '21:00',
+          group: 'Triceps',
+          duration: 30,
+          completed: false,
+          exercises: [
+            { id: `triceps-1-${offset}`, name: 'Tricep Pushdowns', sets: 3, reps: 12, completed: false },
+            { id: `triceps-2-${offset}`, name: 'Skull Crushers', sets: 3, reps: 10, completed: false },
+            { id: `triceps-3-${offset}`, name: 'Overhead Extensions', sets: 3, reps: 12, completed: false },
+          ],
+        }
+      ],
+      tuesday: [
+        {
+          id: `tuesday-1-${offset}`,
+          time: '19:30',
+          group: 'Back',
+          duration: 50,
+          completed: false,
+          exercises: [
+            { id: `back-1-${offset}`, name: 'Pull-Ups', sets: 4, reps: 8, completed: false },
+            { id: `back-2-${offset}`, name: 'Barbell Rows', sets: 3, reps: 10, completed: false },
+            { id: `back-3-${offset}`, name: 'Lat Pulldowns', sets: 3, reps: 12, completed: false },
+          ],
+        },
+        {
+          id: `tuesday-2-${offset}`,
+          time: '20:30',
+          group: 'Biceps',
+          duration: 25,
+          completed: false,
+          exercises: [
+            { id: `biceps-1-${offset}`, name: 'Barbell Curls', sets: 3, reps: 12, completed: false },
+            { id: `biceps-2-${offset}`, name: 'Hammer Curls', sets: 3, reps: 12, completed: false },
+            { id: `biceps-3-${offset}`, name: 'Preacher Curls', sets: 3, reps: 10, completed: false },
+          ],
+        }
+      ],
+      thursday: [
+        {
+          id: `thursday-1-${offset}`,
+          time: '20:00',
+          group: 'Shoulders',
+          duration: 40,
+          completed: false,
+          exercises: [
+            { id: `shoulders-1-${offset}`, name: 'Military Press', sets: 4, reps: 8, completed: false },
+            { id: `shoulders-2-${offset}`, name: 'Lateral Raises', sets: 3, reps: 12, completed: false },
+            { id: `shoulders-3-${offset}`, name: 'Front Raises', sets: 3, reps: 12, completed: false },
+          ],
+        },
+        {
+          id: `thursday-2-${offset}`,
+          time: '21:00',
+          group: 'Traps',
+          duration: 20,
+          completed: false,
+          exercises: [
+            { id: `traps-1-${offset}`, name: 'Shrugs', sets: 3, reps: 15, completed: false },
+            { id: `traps-2-${offset}`, name: 'Upright Rows', sets: 3, reps: 12, completed: false },
+            { id: `traps-3-${offset}`, name: 'Face Pulls', sets: 3, reps: 15, completed: false },
+          ],
+        }
+      ],
+      saturday: [
+        {
+          id: `saturday-1-${offset}`,
+          time: '19:00',
+          group: 'Legs',
+          duration: 60,
+          completed: false,
+          exercises: [
+            { id: `legs-1-${offset}`, name: 'Squats', sets: 4, reps: 8, completed: false },
+            { id: `legs-2-${offset}`, name: 'Leg Press', sets: 3, reps: 12, completed: false },
+            { id: `legs-3-${offset}`, name: 'Romanian Deadlifts', sets: 3, reps: 10, completed: false },
+          ],
+        },
+        {
+          id: `saturday-2-${offset}`,
+          time: '20:00',
+          group: 'Calves',
+          duration: 15,
+          completed: false,
+          exercises: [
+            { id: `calves-1-${offset}`, name: 'Standing Calf Raises', sets: 4, reps: 15, completed: false },
+            { id: `calves-2-${offset}`, name: 'Seated Calf Raises', sets: 3, reps: 20, completed: false },
+            { id: `calves-3-${offset}`, name: 'Leg Press Calf Raises', sets: 3, reps: 15, completed: false },
+          ],
+        }
+      ],
+      sunday: [
+        {
+          id: `sunday-1-${offset}`,
+          time: '20:00',
+          group: 'Core',
+          duration: 30,
+          completed: false,
+          exercises: [
+            { id: `core-1-${offset}`, name: 'Planks', sets: 3, reps: 60, completed: false },
+            { id: `core-2-${offset}`, name: 'Russian Twists', sets: 3, reps: 20, completed: false },
+            { id: `core-3-${offset}`, name: 'Leg Raises', sets: 3, reps: 15, completed: false },
+          ],
+        },
+        {
+          id: `sunday-2-${offset}`,
+          time: '21:00',
+          group: 'Arms',
+          duration: 25,
+          completed: false,
+          exercises: [
+            { id: `arms-1-${offset}`, name: 'Superset Curls', sets: 3, reps: 12, completed: false },
+            { id: `arms-2-${offset}`, name: 'Tricep Extensions', sets: 3, reps: 12, completed: false },
+            { id: `arms-3-${offset}`, name: 'Forearm Curls', sets: 3, reps: 15, completed: false },
+          ],
+        }
+      ]
+    };
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + index);
+      const today = new Date();
+      const isToday = date.toDateString() === today.toDateString();
+      const dayIndex = (date.getDay() + 6) % 7;
+      const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+      // Map day index to workout template
+      let workouts = [];
+      if (dayIndex === 0) workouts = workoutTemplates.monday;
+      else if (dayIndex === 1) workouts = workoutTemplates.tuesday;
+      else if (dayIndex === 3) workouts = workoutTemplates.thursday;
+      else if (dayIndex === 5) workouts = workoutTemplates.saturday;
+      else if (dayIndex === 6) workouts = workoutTemplates.sunday;
+
+      return {
+        day: dayNames[dayIndex],
+        date: date.getDate().toString(),
+        hasWorkout: ![2, 4].includes(dayIndex),
+        isRest: [2, 4].includes(dayIndex),
+        isToday,
+        fullDate: date,
+        workouts
+      };
+    });
+  };
+
+  // Generate weeks data - use external data if provided, otherwise generate internally
+  const weeks = externalWorkoutDays && externalWorkoutDays.length > 0 
+    ? generateWeeksFromExternalData()
+    : Array.from({ length: totalWeeks }, (_, index) => {
+        const weekOffset = minWeekOffset + index;
+        return generateSingleWeek(weekOffset);
+      });
+
+  // Initialize scroll position to center week (index 2)
+  useEffect(() => {
+    if (!isInitialized.current) {
+      const targetRef = isCompact ? compactScrollViewRef : scrollViewRef;
+      if (targetRef.current) {
+        setTimeout(() => {
+          targetRef.current.scrollTo({
+            x: currentScrollIndex * weekWidth,
+            animated: false
+          });
+          lastScrollIndex.current = currentScrollIndex;
+        }, 100);
+      }
+      isInitialized.current = true;
+    }
+  }, [isCompact, weekWidth, currentScrollIndex]);
+
+  // Handle external scroll commands
+  useEffect(() => {
+    if (scrollToIndex !== undefined && scrollToIndex !== lastScrollIndex.current) {
+      const targetRef = isCompact ? compactScrollViewRef : scrollViewRef;
+      if (targetRef.current && isInitialized.current) {
+        // console.log(`WeekSchedule ${isCompact ? 'compact' : 'normal'} syncing to index:`, scrollToIndex);
+        targetRef.current.scrollTo({
+          x: scrollToIndex * weekWidth,
+          animated: true
+        });
+        lastScrollIndex.current = scrollToIndex;
+      }
+    }
+  }, [scrollToIndex, isCompact, weekWidth]);
+
+  const handleScrollEnd = (event) => {
     const contentOffset = event.nativeEvent.contentOffset;
-    const index = Math.round(contentOffset.x / weekWidth);
-    if (index !== visibleWeekIndex) {
-      setVisibleWeekIndex(index);
+    const currentIndex = Math.round(contentOffset.x / weekWidth);
+    
+    // Ensure index is within bounds
+    const clampedIndex = Math.max(0, Math.min(currentIndex, totalWeeks - 1));
+    
+    if (clampedIndex !== lastScrollIndex.current) {
+      lastScrollIndex.current = clampedIndex;
+      // Notify parent component about scroll change
+      if (onScrollChange && clampedIndex !== currentScrollIndex) {
+        onScrollChange(clampedIndex);
+      }
     }
   };
 
   if (isCompact) {
-    // Show only current week in compact mode
-    const currentWeek = weeks[currentWeekIndex] || weeks[2];
     return (
-      <WeekView
-        days={currentWeek}
-        selectedDate={selectedDate}
-        onDaySelect={onDaySelect}
-        weekOffset={0}
-        isCompact={true}
-      />
+      <View style={styles.compactContainer}>
+        <ScrollView 
+          ref={compactScrollViewRef}
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={weekWidth}
+          decelerationRate="fast"
+          pagingEnabled
+          onMomentumScrollEnd={handleScrollEnd}
+          scrollEventThrottle={16}
+          bounces={false}
+        >
+          {weeks.map((weekDays, weekIndex) => (
+            <View key={`week-${minWeekOffset + weekIndex}`} style={styles.compactWeekWrapper}>
+              <WeekView
+                days={weekDays}
+                selectedDate={selectedDate}
+                onDaySelect={onDaySelect}
+                weekOffset={minWeekOffset + weekIndex}
+                isCompact={true}
+              />
+            </View>
+          ))}
+        </ScrollView>
+      </View>
     );
   }
 
@@ -385,16 +506,17 @@ const WeekSchedule = ({ onDaySelect, selectedDate, isCompact = false }) => {
         snapToInterval={weekWidth}
         decelerationRate="fast"
         pagingEnabled
-        onScroll={handleScroll}
+        onMomentumScrollEnd={handleScrollEnd}
         scrollEventThrottle={16}
+        bounces={false}
       >
         {weeks.map((weekDays, weekIndex) => (
-          <View key={weekIndex} style={styles.weekWrapper}>
+          <View key={`week-${minWeekOffset + weekIndex}`} style={styles.weekWrapper}>
             <WeekView
               days={weekDays}
               selectedDate={selectedDate}
               onDaySelect={onDaySelect}
-              weekOffset={weekIndex - 2}
+              weekOffset={minWeekOffset + weekIndex}
               isCompact={false}
             />
           </View>
@@ -406,11 +528,11 @@ const WeekSchedule = ({ onDaySelect, selectedDate, isCompact = false }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 16,
+    paddingTop: 12,
   },
   weekWrapper: {
     width: Dimensions.get('window').width,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   weekContainer: {
     width: '100%',
@@ -418,8 +540,8 @@ const styles = StyleSheet.create({
   },
   weekHeader: {
     width: '100%',
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: 12,
+    marginBottom: 12,
   },
   weekTopRow: {
     flexDirection: 'row',
@@ -431,39 +553,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   weekNumberLabel: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
-    marginRight: 8,
+    marginRight: 6,
     fontWeight: '500',
   },
   weekNumberValue: {
-    fontSize: 24,
+    fontSize: 22,
     color: '#000',
     fontWeight: 'bold',
   },
   weekStatusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
   },
   weekStatusText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   daysWrapper: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   dayItem: {
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
-    borderRadius: 20,
-    padding: 8,
-    paddingBottom: 12,
-    width: 42,
-    height: 115,
+    borderRadius: 18,
+    padding: 6,
+    paddingBottom: 10,
+    width: 38,
+    height: 100,
     marginHorizontal: 1,
   },
   selectedDay: {
@@ -472,18 +594,18 @@ const styles = StyleSheet.create({
   },
   todayDay: {
     backgroundColor: '#fff',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#000',
   },
   dayText: {
-    fontSize: 16,
-    marginBottom: 4,
+    fontSize: 14,
+    marginBottom: 3,
     color: '#666',
     fontWeight: '500',
   },
   dateText: {
-    fontSize: 14,
-    marginBottom: 8,
+    fontSize: 13,
+    marginBottom: 6,
     color: '#666',
   },
   selectedText: {
@@ -495,13 +617,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   iconContainer: {
-    marginBottom: 8,
-    height: 24,
+    marginBottom: 6,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   restText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#666',
   },
@@ -510,70 +632,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 'auto',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   timeText: {
-    fontSize: 12,
+    fontSize: 11,
     marginLeft: 2,
     color: '#666',
   },
   // Compact mode styles
+  compactContainer: {
+    backgroundColor: '#fff',
+  },
+  compactWeekWrapper: {
+    width: Dimensions.get('window').width,
+  },
   compactWeekContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-  },
-  compactHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  compactWeekText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    letterSpacing: 0.5,
-  },
-  compactStatusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    paddingVertical: 8,
+    paddingBottom: 12,
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     elevation: 2,
-  },
-  compactStatusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
   compactDaysWrapper: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
   },
   compactDayItem: {
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 14,
-    padding: 8,
+    borderRadius: 12,
+    padding: 4,
     width: 36,
-    height: 65,
-    marginHorizontal: 2,
+    height: 50,
+    marginHorizontal: 1,
+    marginTop: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
   },
@@ -584,33 +692,33 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 3,
   },
   compactTodayDay: {
     backgroundColor: '#fff',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#000',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
     elevation: 2,
   },
   compactDayText: {
-    fontSize: 13,
-    marginBottom: 3,
+    fontSize: 11,
+    marginBottom: 1,
     color: '#666',
     fontWeight: '600',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
   compactDateText: {
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 10,
+    marginBottom: 3,
     color: '#666',
     fontWeight: '500',
   },
@@ -623,17 +731,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   compactWorkoutIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#000',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
     elevation: 1,
   },
   compactWorkoutIndicatorSelected: {

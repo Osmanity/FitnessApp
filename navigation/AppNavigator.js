@@ -1,14 +1,29 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import PlansScreen from '../screens/PlansScreen';
 import ProgressScreen from '../screens/ProgressScreen';
+import WorkoutHistoryScreen from '../screens/WorkoutHistoryScreen';
+import WorkoutTemplatesScreen from '../screens/WorkoutTemplatesScreen';
 import ExercisesScreen from '../screens/ExercisesScreen';
 import FoodScreen from '../screens/FoodScreen';
 import SocialScreen from '../screens/SocialScreen';
 import MenuScreen from '../screens/MenuScreen';
 
 const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+// Plans Stack Navigator
+const PlansStack = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="PlansMain" component={PlansScreen} />
+      <Stack.Screen name="WorkoutHistory" component={WorkoutHistoryScreen} />
+      <Stack.Screen name="WorkoutTemplates" component={WorkoutTemplatesScreen} />
+    </Stack.Navigator>
+  );
+};
 
 const AppNavigator = () => {
   return (
@@ -21,7 +36,7 @@ const AppNavigator = () => {
     >
       <Tab.Screen
         name="Plans"
-        component={PlansScreen}
+        component={PlansStack}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="calendar" size={size} color={color} />
