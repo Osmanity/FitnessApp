@@ -186,8 +186,9 @@ const generateAllWorkoutDays = () => {
   const days = [];
   const today = new Date();
   
-  // Generate 30 days (15 before, today, 14 after)
-  for (let i = -15; i <= 14; i++) {
+  // Generate 35 days to match WeekSchedule's 5-week range (2 weeks before, current week, 2 weeks after)
+  // This ensures we have data for all days that WeekSchedule can display
+  for (let i = -14; i <= 20; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     
@@ -345,7 +346,7 @@ const generateAllWorkoutDays = () => {
       isToday,
       fullDate: date,
       workouts,
-      dayIndex: i + 15 // Index in the array (today is at index 15)
+      dayIndex: i + 14 // Index in the array (today is at index 14)
     });
   }
   
@@ -364,10 +365,11 @@ const PlansScreen = ({ navigation }) => {
   // Scroll synchronization state
   const [currentScrollIndex, setCurrentScrollIndex] = useState(2);
   const [scrollToIndex, setScrollToIndex] = useState(undefined);
+  const [isSwipeNavigating, setIsSwipeNavigating] = useState(false); // Flag to prevent week sync during swipe
 
   // Swipe navigation state
   const [allWorkoutDays] = useState(generateAllWorkoutDays());
-  const [currentDayIndex, setCurrentDayIndex] = useState(15); // Today is at index 15
+  const [currentDayIndex, setCurrentDayIndex] = useState(14); // Today is at index 14
   const translateX = useSharedValue(0);
   const screenWidth = Dimensions.get('window').width;
 
@@ -399,25 +401,45 @@ const PlansScreen = ({ navigation }) => {
   };
 
   const handleDaySelect = (day) => {
-    // Find the corresponding day in allWorkoutDays array
-    const dayIndex = allWorkoutDays.findIndex(workoutDay => 
-      workoutDay.fullDate.toDateString() === day.fullDate.toDateString()
-    );
-    
-    if (dayIndex !== -1) {
-      navigateToDay(dayIndex);
-    } else {
-      // Fallback: create a compatible day object and find closest match
-      const selectedDate = day.fullDate;
-      const today = new Date();
-      const daysDiff = Math.floor((selectedDate - today) / (1000 * 60 * 60 * 24));
-      const targetIndex = 15 + daysDiff; // Today is at index 15
+    try {
+      // Find the corresponding day in allWorkoutDays array
+      const dayIndex = allWorkoutDays.findIndex(workoutDay => 
+        workoutDay.fullDate.toDateString() === day.fullDate.toDateString()
+      );
       
-      if (targetIndex >= 0 && targetIndex < allWorkoutDays.length) {
-        navigateToDay(targetIndex);
+      if (dayIndex !== -1) {
+        navigateToDay(dayIndex, false); // Not from swipe, allow week sync
       } else {
-        setSelectedDay(day);
+        // Fallback: create a compatible day object and find closest match
+        const selectedDate = day.fullDate;
+        const today = new Date();
+        const daysDiff = Math.floor((selectedDate - today) / (1000 * 60 * 60 * 24));
+        const targetIndex = 14 + daysDiff; // Today is at index 14
+        
+        // Add bounds checking to prevent crashes
+        if (targetIndex >= 0 && targetIndex < allWorkoutDays.length) {
+          navigateToDay(targetIndex, false); // Not from swipe, allow week sync
+        } else {
+          // If the date is outside our allWorkoutDays range, just update the selected day
+          // without trying to navigate to an invalid index
+          console.warn(`Selected date is outside allWorkoutDays range. Days diff: ${daysDiff}, Target index: ${targetIndex}, Array length: ${allWorkoutDays.length}`);
+          setSelectedDay(day);
+          
+          // Try to update the week schedule if possible
+          const weeksDiff = Math.floor(daysDiff / 7);
+          const newWeekIndex = 2 + weeksDiff; // Center week is at index 2
+          
+          if (newWeekIndex >= 0 && newWeekIndex <= 4) {
+            setCurrentScrollIndex(newWeekIndex);
+            setScrollToIndex(newWeekIndex);
+            setTimeout(() => setScrollToIndex(undefined), 150);
+          }
+        }
       }
+    } catch (error) {
+      console.error('Error in handleDaySelect:', error);
+      // Fallback: just set the selected day without navigation
+      setSelectedDay(day);
     }
   };
 
@@ -483,61 +505,90 @@ const PlansScreen = ({ navigation }) => {
   };
 
   // Swipe navigation functions
-  const navigateToDay = useCallback((dayIndex) => {
-    if (dayIndex >= 0 && dayIndex < allWorkoutDays.length) {
-      setCurrentDayIndex(dayIndex);
-      const newSelectedDay = allWorkoutDays[dayIndex];
-      setSelectedDay(newSelectedDay);
-      
-      // Calculate which week this day belongs to and update week schedule
-      const today = new Date();
-      const selectedDate = newSelectedDay.fullDate;
-      
-      // Get the start of the current week (Monday)
-      const startOfCurrentWeek = new Date(today);
-      const currentDayOfWeek = startOfCurrentWeek.getDay();
-      const daysToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
-      startOfCurrentWeek.setDate(today.getDate() + daysToMonday);
-      startOfCurrentWeek.setHours(0, 0, 0, 0);
-      
-      // Get the start of the selected week (Monday)
-      const startOfSelectedWeek = new Date(selectedDate);
-      const selectedDayOfWeek = startOfSelectedWeek.getDay();
-      const daysToMondaySelected = selectedDayOfWeek === 0 ? -6 : 1 - selectedDayOfWeek;
-      startOfSelectedWeek.setDate(selectedDate.getDate() + daysToMondaySelected);
-      startOfSelectedWeek.setHours(0, 0, 0, 0);
-      
-      // Calculate week difference
-      const weeksDiff = Math.round((startOfSelectedWeek - startOfCurrentWeek) / (7 * 24 * 60 * 60 * 1000));
-      const newWeekIndex = 2 + weeksDiff; // Center week is at index 2
-      
-      // Update week schedule if we're in a different week
-      if (newWeekIndex !== currentScrollIndex && newWeekIndex >= 0 && newWeekIndex <= 4) {
-        setCurrentScrollIndex(newWeekIndex);
-        setScrollToIndex(newWeekIndex);
-        setTimeout(() => setScrollToIndex(undefined), 150);
+  const navigateToDay = useCallback((dayIndex, fromSwipe = false) => {
+    try {
+      if (dayIndex >= 0 && dayIndex < allWorkoutDays.length && allWorkoutDays[dayIndex]) {
+        setCurrentDayIndex(dayIndex);
+        const newSelectedDay = allWorkoutDays[dayIndex];
+        setSelectedDay(newSelectedDay);
+        
+        // Only update week schedule if not from swipe navigation or if we're in a significantly different week
+        if (!fromSwipe || !isSwipeNavigating) {
+          // Calculate which week this day belongs to and update week schedule
+          const today = new Date();
+          const selectedDate = newSelectedDay.fullDate;
+          
+          // Get the start of the current week (Monday)
+          const startOfCurrentWeek = new Date(today);
+          const currentDayOfWeek = startOfCurrentWeek.getDay();
+          const daysToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+          startOfCurrentWeek.setDate(today.getDate() + daysToMonday);
+          startOfCurrentWeek.setHours(0, 0, 0, 0);
+          
+          // Get the start of the selected week (Monday)
+          const startOfSelectedWeek = new Date(selectedDate);
+          const selectedDayOfWeek = startOfSelectedWeek.getDay();
+          const daysToMondaySelected = selectedDayOfWeek === 0 ? -6 : 1 - selectedDayOfWeek;
+          startOfSelectedWeek.setDate(selectedDate.getDate() + daysToMondaySelected);
+          startOfSelectedWeek.setHours(0, 0, 0, 0);
+          
+          // Calculate week difference
+          const weeksDiff = Math.round((startOfSelectedWeek - startOfCurrentWeek) / (7 * 24 * 60 * 60 * 1000));
+          const newWeekIndex = 2 + weeksDiff; // Center week is at index 2
+          
+          // Only update if we're in a different week and within bounds
+          if (newWeekIndex !== currentScrollIndex && newWeekIndex >= 0 && newWeekIndex <= 4) {
+            setCurrentScrollIndex(newWeekIndex);
+            setScrollToIndex(newWeekIndex);
+            setTimeout(() => setScrollToIndex(undefined), 150);
+          }
+        }
+        
+        // Provide haptic feedback
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        console.warn(`Invalid dayIndex: ${dayIndex}, Array length: ${allWorkoutDays.length}`);
       }
-      
-      // Provide haptic feedback
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Error in navigateToDay:', error);
     }
-  }, [allWorkoutDays, currentScrollIndex]);
+  }, [allWorkoutDays, currentScrollIndex, isSwipeNavigating]);
 
   const navigateToNextDay = useCallback(() => {
     const nextIndex = currentDayIndex + 1;
     if (nextIndex < allWorkoutDays.length) {
-      navigateToDay(nextIndex);
+      setIsSwipeNavigating(true);
+      navigateToDay(nextIndex, true);
+      // Reset translateX after navigation and update week sync
+      setTimeout(() => {
+        translateX.value = 0;
+        setIsSwipeNavigating(false);
+        // Trigger week sync update after swipe completes
+        setTimeout(() => {
+          navigateToDay(nextIndex, false);
+        }, 100);
+      }, 300);
     }
   }, [currentDayIndex, navigateToDay]);
 
   const navigateToPreviousDay = useCallback(() => {
     const prevIndex = currentDayIndex - 1;
     if (prevIndex >= 0) {
-      navigateToDay(prevIndex);
+      setIsSwipeNavigating(true);
+      navigateToDay(prevIndex, true);
+      // Reset translateX after navigation and update week sync
+      setTimeout(() => {
+        translateX.value = 0;
+        setIsSwipeNavigating(false);
+        // Trigger week sync update after swipe completes
+        setTimeout(() => {
+          navigateToDay(prevIndex, false);
+        }, 100);
+      }, 300);
     }
   }, [currentDayIndex, navigateToDay]);
 
-  // Pan gesture handler for swipe navigation
+  // Pan gesture handler for card-based swipe navigation
   const panGestureHandler = useAnimatedGestureHandler({
     onStart: (_, context) => {
       context.startX = translateX.value;
@@ -546,47 +597,125 @@ const PlansScreen = ({ navigation }) => {
       translateX.value = context.startX + event.translationX;
     },
     onEnd: (event) => {
-      const threshold = screenWidth * 0.25; // 25% of screen width
+      const threshold = screenWidth * 0.3;
+      const velocity = event.velocityX;
       
-      if (event.translationX > threshold && event.velocityX > 0) {
+      if (event.translationX > threshold || velocity > 500) {
         // Swipe right - go to previous day
-        translateX.value = withSpring(0);
+        translateX.value = withSpring(screenWidth, { damping: 20, stiffness: 150 });
         runOnJS(navigateToPreviousDay)();
-      } else if (event.translationX < -threshold && event.velocityX < 0) {
+      } else if (event.translationX < -threshold || velocity < -500) {
         // Swipe left - go to next day
-        translateX.value = withSpring(0);
+        translateX.value = withSpring(-screenWidth, { damping: 20, stiffness: 150 });
         runOnJS(navigateToNextDay)();
       } else {
         // Snap back to center
-        translateX.value = withSpring(0);
+        translateX.value = withSpring(0, { damping: 25, stiffness: 200 });
       }
     },
   });
 
-  // Animated style for swipe container
-  const swipeContainerStyle = useAnimatedStyle(() => {
+  // Card-based animated styles
+  const currentCardStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      Math.abs(translateX.value),
+      [0, screenWidth * 0.5],
+      [1, 0.9],
+      Extrapolate.CLAMP
+    );
+
     const opacity = interpolate(
       Math.abs(translateX.value),
-      [0, screenWidth * 0.1, screenWidth * 0.25],
-      [1, 0.9, 0.7],
+      [0, screenWidth * 0.8],
+      [1, 0.3],
       Extrapolate.CLAMP
     );
 
     return {
-      transform: [{ translateX: translateX.value }],
+      transform: [
+        { translateX: translateX.value },
+        { scale }
+      ],
       opacity,
+    };
+  });
+
+  // Previous card (right side when swiping right)
+  const previousCardStyle = useAnimatedStyle(() => {
+    const translateXValue = translateX.value;
+    const opacity = interpolate(
+      translateXValue,
+      [0, screenWidth * 0.5, screenWidth],
+      [0, 0.6, 1],
+      Extrapolate.CLAMP
+    );
+    
+    const translateXCard = interpolate(
+      translateXValue,
+      [0, screenWidth],
+      [-screenWidth, 0],
+      Extrapolate.CLAMP
+    );
+
+    const scale = interpolate(
+      translateXValue,
+      [0, screenWidth],
+      [0.8, 1],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      opacity: translateXValue > 0 ? opacity : 0,
+      transform: [
+        { translateX: translateXCard },
+        { scale }
+      ],
+    };
+  });
+
+  // Next card (left side when swiping left)
+  const nextCardStyle = useAnimatedStyle(() => {
+    const translateXValue = translateX.value;
+    const opacity = interpolate(
+      -translateXValue,
+      [0, screenWidth * 0.5, screenWidth],
+      [0, 0.6, 1],
+      Extrapolate.CLAMP
+    );
+    
+    const translateXCard = interpolate(
+      -translateXValue,
+      [0, screenWidth],
+      [screenWidth, 0],
+      Extrapolate.CLAMP
+    );
+
+    const scale = interpolate(
+      -translateXValue,
+      [0, screenWidth],
+      [0.8, 1],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      opacity: translateXValue < 0 ? opacity : 0,
+      transform: [
+        { translateX: translateXCard },
+        { scale }
+      ],
     };
   });
 
   // Handle scroll synchronization between compact and normal week schedulers
   const handleScrollChange = useCallback((newIndex) => {
-    if (newIndex !== currentScrollIndex) {
+    // Don't update week scroll during swipe navigation to prevent conflicts
+    if (!isSwipeNavigating && newIndex !== currentScrollIndex) {
       setCurrentScrollIndex(newIndex);
       setScrollToIndex(newIndex);
       // Reset scrollToIndex after a brief delay to allow both components to sync
       setTimeout(() => setScrollToIndex(undefined), 150);
     }
-  }, [currentScrollIndex]);
+  }, [currentScrollIndex, isSwipeNavigating]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -771,14 +900,92 @@ const PlansScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Swipeable Day Schedule */}
+          {/* Enhanced Swipeable Day Schedule with Previews */}
+          <View style={styles.swipeWrapper}>
+            {/* Previous Day Card */}
+            {currentDayIndex > 0 && allWorkoutDays[currentDayIndex - 1] && (
+              <Animated.View style={[styles.dayCard, styles.previousDayCard, previousCardStyle]}>
+                <View style={styles.cardHeader}>
+                  <MaterialCommunityIcons name="chevron-left" size={20} color="#FF6B35" />
+                  <Text style={styles.cardTitle}>Previous Day</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardDate}>
+                    {allWorkoutDays[currentDayIndex - 1]?.fullDate?.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </Text>
+                  {allWorkoutDays[currentDayIndex - 1]?.isRest ? (
+                    <View style={styles.restDayCard}>
+                      <MaterialCommunityIcons name="sleep" size={32} color="#6c757d" />
+                      <Text style={styles.restDayTitle}>Rest Day</Text>
+                      <Text style={styles.restDaySubtitle}>Recovery & Relaxation</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.workoutPreview}>
+                      <Text style={styles.workoutCount}>
+                        {allWorkoutDays[currentDayIndex - 1]?.workouts?.length || 0} Workout{allWorkoutDays[currentDayIndex - 1]?.workouts?.length !== 1 ? 's' : ''}
+                      </Text>
+                      {allWorkoutDays[currentDayIndex - 1]?.workouts?.slice(0, 2).map((workout, index) => (
+                        <View key={workout.id} style={styles.workoutPreviewItem}>
+                          <MaterialCommunityIcons name="dumbbell" size={16} color="#4CAF50" />
+                          <Text style={styles.workoutPreviewText}>{workout.group} - {workout.duration}min</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Next Day Card */}
+            {currentDayIndex < allWorkoutDays.length - 1 && allWorkoutDays[currentDayIndex + 1] && (
+              <Animated.View style={[styles.dayCard, styles.nextDayCard, nextCardStyle]}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardTitle}>Next Day</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#4CAF50" />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardDate}>
+                    {allWorkoutDays[currentDayIndex + 1]?.fullDate?.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </Text>
+                  {allWorkoutDays[currentDayIndex + 1]?.isRest ? (
+                    <View style={styles.restDayCard}>
+                      <MaterialCommunityIcons name="sleep" size={32} color="#6c757d" />
+                      <Text style={styles.restDayTitle}>Rest Day</Text>
+                      <Text style={styles.restDaySubtitle}>Recovery & Relaxation</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.workoutPreview}>
+                      <Text style={styles.workoutCount}>
+                        {allWorkoutDays[currentDayIndex + 1]?.workouts?.length || 0} Workout{allWorkoutDays[currentDayIndex + 1]?.workouts?.length !== 1 ? 's' : ''}
+                      </Text>
+                      {allWorkoutDays[currentDayIndex + 1]?.workouts?.slice(0, 2).map((workout, index) => (
+                        <View key={workout.id} style={styles.workoutPreviewItem}>
+                          <MaterialCommunityIcons name="dumbbell" size={16} color="#4CAF50" />
+                          <Text style={styles.workoutPreviewText}>{workout.group} - {workout.duration}min</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Main Day Schedule */}
           <PanGestureHandler 
             onGestureEvent={panGestureHandler}
             activeOffsetX={[-10, 10]}
             failOffsetY={[-20, 20]}
             shouldCancelWhenOutside={true}
           >
-            <Animated.View style={[styles.swipeContainer, swipeContainerStyle]}>
+              <Animated.View style={[styles.swipeContainer, currentCardStyle]}>
               <DaySchedule 
                 selectedDay={selectedDay} 
                 workoutProgress={workoutProgress}
@@ -789,12 +996,12 @@ const PlansScreen = ({ navigation }) => {
                 navigation={navigation}
               />
               
-              {/* Swipe indicators */}
+                {/* Enhanced Swipe indicators */}
               <View style={styles.swipeIndicators}>
                 {currentDayIndex > 0 && (
                   <View style={styles.swipeIndicatorLeft}>
-                    <MaterialCommunityIcons name="chevron-left" size={20} color="#666" />
-                    <Text style={styles.swipeIndicatorText}>Previous Day</Text>
+                      <MaterialCommunityIcons name="gesture-swipe-right" size={18} color="#FF6B35" />
+                      <Text style={styles.swipeIndicatorText}>Swipe Right</Text>
                   </View>
                 )}
                 
@@ -825,13 +1032,14 @@ const PlansScreen = ({ navigation }) => {
                 
                 {currentDayIndex < allWorkoutDays.length - 1 && (
                   <View style={styles.swipeIndicatorRight}>
-                    <Text style={styles.swipeIndicatorText}>Next Day</Text>
-                    <MaterialCommunityIcons name="chevron-right" size={20} color="#666" />
+                      <Text style={styles.swipeIndicatorText}>Swipe Left</Text>
+                      <MaterialCommunityIcons name="gesture-swipe-left" size={18} color="#4CAF50" />
                   </View>
                 )}
               </View>
             </Animated.View>
           </PanGestureHandler>
+          </View>
         </Animated.View>
       </Animated.ScrollView>
     </SafeAreaView>
@@ -960,6 +1168,18 @@ const styles = StyleSheet.create({
   },
   swipeContainer: {
     flex: 1,
+    zIndex: 5,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
   },
   swipeIndicators: {
     flexDirection: 'row',
@@ -1050,6 +1270,111 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     color: '#4CAF50',
+  },
+  swipeWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
+  dayCard: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    bottom: 100,
+    marginHorizontal: 20,
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 1,
+  },
+  previousDayCard: {
+    borderLeftColor: '#FF6B35',
+    borderLeftWidth: 4,
+  },
+  nextDayCard: {
+    borderRightColor: '#4CAF50',
+    borderRightWidth: 4,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+    marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  cardContent: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  cardDate: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
+    textAlign: 'center',
+  },
+  restDayCard: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 20,
+  },
+  restDayTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6c757d',
+  },
+  restDaySubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6c757d',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  workoutPreview: {
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  workoutCount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  workoutPreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 250,
+  },
+  workoutPreviewText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#495057',
+    flex: 1,
   },
 });
 
