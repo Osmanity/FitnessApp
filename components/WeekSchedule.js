@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 /**
@@ -17,69 +17,92 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
  * - scrollToIndex: External command to scroll to a specific index
  */
 
-const DayItem = ({ day, date, hasWorkout, isRest, isSelected, isToday, onPress }) => (
-  <TouchableOpacity 
-    style={[
-      styles.dayItem, 
-      isToday && styles.todayDay,
-      isSelected && styles.selectedDay,
-    ]} 
-    onPress={onPress}
-  >
-    <Text style={[
-      styles.dayText,
-      isToday && !isSelected && styles.todayText,
-      isSelected && styles.selectedText,
-    ]}>{day}</Text>
-    <Text style={[
-      styles.dateText,
-      isToday && !isSelected && styles.todayText,
-      isSelected && styles.selectedText,
-    ]}>{date}</Text>
-    <View style={styles.iconContainer}>
-      {isRest ? (
-        <Text style={[
-          styles.restText,
-          isToday && !isSelected && styles.todayText,
-          isSelected && styles.selectedText,
-        ]}>R</Text>
-      ) : (
-        <MaterialCommunityIcons
-          name="dumbbell"
-          size={20}
-          color={isSelected ? '#fff' : isToday ? '#000' : '#666'}
-        />
-      )}
-    </View>
-    <View style={styles.timeContainer}>
-      <MaterialCommunityIcons
-        name="clock-outline"
-        size={14}
-        color={isSelected ? '#fff' : isToday ? '#000' : '#666'}
-      />
+// Constants
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const WEEK_VIEW_HEIGHT = 170;
+const MONTH_VIEW_HEIGHT = 450;
+const DAYS_IN_WEEK = 7;
+const DAY_NAMES = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+const DayItem = ({ day, date, hasWorkout, isRest, isSelected, isToday, onPress }) => {
+  // Handle press with immediate response
+  const handlePress = () => {
+    if (onPress && typeof onPress === 'function') {
+      onPress();
+    }
+  };
+
+  return (
+    <TouchableOpacity 
+      style={[
+        styles.dayItem, 
+        isToday && styles.todayDay,
+        isSelected && styles.selectedDay,
+      ]} 
+      onPress={handlePress}
+      activeOpacity={0.6}
+      hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+    >
       <Text style={[
-        styles.timeText,
+        styles.dayText,
         isToday && !isSelected && styles.todayText,
         isSelected && styles.selectedText,
-      ]}>8h</Text>
-    </View>
-  </TouchableOpacity>
-);
-
-const getWeekNumber = (date) => {
-  // Copy date so don't modify original
-  const d = new Date(date);
-  // Set to nearest Thursday: current date + 4 - current day number
-  // Make Sunday's day number 7
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  // Get first day of year
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  // Calculate full weeks to nearest Thursday
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return weekNo;
+      ]}>{day}</Text>
+      <Text style={[
+        styles.dateText,
+        isToday && !isSelected && styles.todayText,
+        isSelected && styles.selectedText,
+      ]}>{date}</Text>
+      <View style={styles.indicatorContainer}>
+        {!isRest && (
+          <MaterialCommunityIcons 
+            name="dumbbell" 
+            size={12} 
+            color={isSelected ? '#fff' : '#000'} 
+          />
+        )}
+      </View>
+    </TouchableOpacity>
+  );
 };
 
-const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = false }) => {
+// Helper function to get week number
+const getWeekNumber = (date) => {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+};
+
+// Helper function to get month display info
+const getMonthDisplayInfo = (days) => {
+  if (!days || days.length === 0) return { monthName: '', year: new Date().getFullYear() };
+
+  // Count occurrences of each month in the week
+  const monthCounts = {};
+  days.forEach(day => {
+    if (day.fullDate) {
+      const month = day.fullDate.getMonth();
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
+    }
+  });
+
+  // Get the most frequent month
+  const dominantMonth = Object.entries(monthCounts)
+    .sort((a, b) => b[1] - a[1])[0][0];
+
+  // Use the middle day (Wednesday) for the year
+  const referenceDate = days[3]?.fullDate || days[0]?.fullDate || new Date();
+  const displayDate = new Date(referenceDate);
+  displayDate.setMonth(parseInt(dominantMonth));
+
+  return {
+    monthName: displayDate.toLocaleDateString('en-US', { month: 'long' }),
+    year: displayDate.getFullYear()
+  };
+};
+
+const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = false, onMonthToggle, isMonthExpanded, monthInfo }) => {
   if (isCompact) {
     return (
       <View style={styles.compactWeekContainer}>
@@ -97,30 +120,29 @@ const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = fal
     );
   }
 
-  let weekText = 'Current';
-  let weekTextColor = '#000';
-  if (weekOffset < 0) {
-    weekText = 'Previous';
-    weekTextColor = '#666';
-  } else if (weekOffset > 0) {
-    weekText = 'Ahead';
-    weekTextColor = '#666';
-  }
-
   const firstDayOfWeek = days[0].fullDate;
   const weekNumber = getWeekNumber(firstDayOfWeek);
-
+  
   return (
-    <View style={styles.weekContainer}>
+    <View style={styles.weekWrapper}>
       <View style={styles.weekHeader}>
-        <View style={styles.weekTopRow}>
-          <View style={styles.weekNumberContainer}>
+        <View style={styles.weekInfo}>
+          <View style={styles.weekNumberBadge}>
             <Text style={styles.weekNumberLabel}>Week</Text>
             <Text style={styles.weekNumberValue}>{weekNumber}</Text>
           </View>
-          <View style={[styles.weekStatusBadge, { backgroundColor: weekTextColor === '#000' ? '#E8F3FF' : '#F5F5F5' }]}>
-            <Text style={[styles.weekStatusText, { color: weekTextColor }]}>{weekText}</Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.monthDisplay}
+            onPress={onMonthToggle}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.monthText}>{monthInfo.monthName}</Text>
+            <MaterialCommunityIcons 
+              name={isMonthExpanded ? "chevron-up" : "chevron-down"} 
+              size={16} 
+              color="#333" 
+            />
+          </TouchableOpacity>
         </View>
       </View>
       <View style={styles.daysWrapper}>
@@ -137,33 +159,506 @@ const WeekView = ({ days, selectedDate, onDaySelect, weekOffset, isCompact = fal
   );
 };
 
-const CompactDayItem = ({ day, date, hasWorkout, isRest, isSelected, isToday, onPress }) => (
-  <TouchableOpacity 
-    style={[
-      styles.compactDayItem, 
-      isToday && styles.compactTodayDay,
-      isSelected && styles.compactSelectedDay,
-    ]} 
-    onPress={onPress}
-  >
-    <Text style={[
-      styles.compactDayText,
-      isToday && !isSelected && styles.compactTodayText,
-      isSelected && styles.compactSelectedText,
-    ]}>{day}</Text>
-    <Text style={[
-      styles.compactDateText,
-      isToday && !isSelected && styles.compactTodayText,
-      isSelected && styles.compactSelectedText,
-    ]}>{date}</Text>
-    {!isRest && (
-      <View style={[
-        styles.compactWorkoutIndicator,
-        isSelected && styles.compactWorkoutIndicatorSelected
-      ]} />
-    )}
-  </TouchableOpacity>
-);
+const CompactDayItem = ({ day, date, hasWorkout, isRest, isSelected, isToday, onPress }) => {
+  // Handle press with immediate response
+  const handlePress = () => {
+    if (onPress && typeof onPress === 'function') {
+      onPress();
+    }
+  };
+
+  return (
+    <TouchableOpacity 
+      style={[
+        styles.compactDayItem, 
+        isToday && styles.compactTodayDay,
+        isSelected && styles.compactSelectedDay,
+      ]} 
+      onPress={handlePress}
+      activeOpacity={0.6}
+      hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+    >
+      <Text style={[
+        styles.compactDayText,
+        isToday && !isSelected && styles.compactTodayText,
+        isSelected && styles.compactSelectedText,
+      ]}>{day}</Text>
+      <Text style={[
+        styles.compactDateText,
+        isToday && !isSelected && styles.compactTodayText,
+        isSelected && styles.compactSelectedText,
+      ]}>{date}</Text>
+      <View style={styles.compactIndicatorContainer}>
+        {!isRest && (
+          <MaterialCommunityIcons 
+            name="dumbbell" 
+            size={10} 
+            color={isSelected ? '#fff' : '#000'} 
+          />
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const MonthView = ({ selectedDate, onDaySelect, currentMonth, currentYear, onMonthChange }) => {
+  // Get first day of the month
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+  const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+  
+  // Get the first Monday of the calendar (might be from previous month)
+  const startDate = new Date(firstDayOfMonth);
+  const dayOfWeek = startDate.getDay();
+  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  startDate.setDate(startDate.getDate() - daysToSubtract);
+  
+  // Generate 6 weeks (42 days) to cover the entire month view
+  const weeks = [];
+  const today = new Date();
+  
+  for (let week = 0; week < 6; week++) {
+    const weekDays = [];
+    
+    for (let day = 0; day < 7; day++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + (week * 7) + day);
+      
+      const isCurrentMonth = currentDate.getMonth() === currentMonth;
+      const isToday = currentDate.toDateString() === today.toDateString();
+      const isSelected = selectedDate === currentDate.toDateString();
+      
+      // Determine if it's a workout day (same logic as week view)
+      const dayIndex = (currentDate.getDay() + 6) % 7; // Convert to Monday = 0
+      const isRest = [2, 4].includes(dayIndex); // Wednesday and Friday are rest days
+      const hasWorkout = !isRest;
+      
+      const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+      
+      weekDays.push({
+        day: dayNames[dayIndex],
+        date: currentDate.getDate().toString(),
+        hasWorkout,
+        isRest,
+        isToday,
+        isCurrentMonth,
+        isSelected,
+        fullDate: currentDate,
+        workouts: [] // Could be populated with actual workout data
+      });
+    }
+    
+    weeks.push(weekDays);
+  }
+  
+  const monthName = firstDayOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  
+  // Navigation functions
+  const goToPreviousMonth = () => {
+    const newDate = new Date(currentYear, currentMonth - 1, 1);
+    onMonthChange(newDate.getMonth(), newDate.getFullYear());
+  };
+  
+  const goToNextMonth = () => {
+    const newDate = new Date(currentYear, currentMonth + 1, 1);
+    onMonthChange(newDate.getMonth(), newDate.getFullYear());
+  };
+  
+  // Handle day selection with immediate response
+  const handleDayPress = (day) => {
+    // Ensure immediate response by calling onDaySelect directly
+    if (onDaySelect && typeof onDaySelect === 'function') {
+      onDaySelect(day);
+    }
+  };
+
+  return (
+    <View style={styles.monthContainer}>
+      <View style={styles.monthHeader}>
+        <View style={styles.monthHeaderContent}>
+          <TouchableOpacity 
+            style={styles.monthNavButton}
+            onPress={goToPreviousMonth}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="chevron-left" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.monthTitle}>{monthName}</Text>
+          <TouchableOpacity 
+            style={styles.monthNavButton}
+            onPress={goToNextMonth}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      {/* Day headers */}
+      <View style={styles.monthDayHeaders}>
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((dayName, index) => (
+          <View key={index} style={styles.monthDayHeader}>
+            <Text style={styles.monthDayHeaderText}>{dayName}</Text>
+          </View>
+        ))}
+      </View>
+      
+      {/* Calendar grid */}
+      <View style={styles.monthGrid}>
+        {weeks.map((week, weekIndex) => (
+          <View key={weekIndex} style={styles.monthWeekRow}>
+            {week.map((day, dayIndex) => (
+              <TouchableOpacity
+                key={`${weekIndex}-${dayIndex}`}
+                style={[
+                  styles.monthDayItem,
+                  day.isToday && styles.monthTodayDay,
+                  day.isSelected && styles.monthSelectedDay,
+                  !day.isCurrentMonth && styles.monthOtherMonthDay,
+                ]} 
+                onPress={() => handleDayPress(day)}
+                activeOpacity={0.6}
+                hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+              >
+                <Text style={[
+                  styles.monthDayText,
+                  day.isToday && !day.isSelected && styles.monthTodayText,
+                  day.isSelected && styles.monthSelectedText,
+                  !day.isCurrentMonth && styles.monthOtherMonthText,
+                ]}>
+                  {day.date}
+                </Text>
+                
+                {/* Workout indicator */}
+                {day.isCurrentMonth && !day.isRest && (
+                  <MaterialCommunityIcons 
+                    name="dumbbell" 
+                    size={10} 
+                    color={day.isSelected ? '#fff' : '#000'} 
+                  />
+                )}
+                
+                {/* Rest day indicator */}
+                {day.isCurrentMonth && day.isRest && (
+                  <Text style={[
+                    styles.monthRestIndicator,
+                    day.isSelected && styles.monthRestIndicatorSelected
+                  ]}>
+                    R
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const SwipeableMonthView = ({ selectedDate, onDaySelect, currentMonth, currentYear, onMonthChange, onToggleExpanded }) => {
+  const scrollViewRef = useRef(null);
+  const screenWidth = Dimensions.get('window').width;
+  const monthWidth = screenWidth;
+  const isInitialized = useRef(false);
+  const isScrolling = useRef(false);
+  const [currentDisplayMonth, setCurrentDisplayMonth] = useState({ month: currentMonth, year: currentYear });
+  const scrollTimeout = useRef(null);
+
+  // Generate 3 months: previous, current, next
+  const generateMonthData = useCallback((baseMonth, baseYear, monthOffset = 0) => {
+    const targetDate = new Date(baseYear, baseMonth + monthOffset, 1);
+    const targetMonth = targetDate.getMonth();
+    const targetYear = targetDate.getFullYear();
+    
+    // Get first day of the month
+    const firstDayOfMonth = new Date(targetYear, targetMonth, 1);
+    
+    // Get the first Monday of the calendar (might be from previous month)
+    const startDate = new Date(firstDayOfMonth);
+    const dayOfWeek = startDate.getDay();
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startDate.setDate(startDate.getDate() - daysToSubtract);
+    
+    // Generate 6 weeks (42 days) to cover the entire month view
+    const weeks = [];
+    const today = new Date();
+    
+    for (let week = 0; week < 6; week++) {
+      const weekDays = [];
+      
+      for (let day = 0; day < 7; day++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + (week * 7) + day);
+        
+        const isCurrentMonth = currentDate.getMonth() === targetMonth;
+        const isToday = currentDate.toDateString() === today.toDateString();
+        const isSelected = selectedDate === currentDate.toDateString();
+        
+        // Determine if it's a workout day (same logic as week view)
+        const dayIndex = (currentDate.getDay() + 6) % 7; // Convert to Monday = 0
+        const isRest = [2, 4].includes(dayIndex); // Wednesday and Friday are rest days
+        const hasWorkout = !isRest;
+        
+        const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        
+        weekDays.push({
+          day: dayNames[dayIndex],
+          date: currentDate.getDate().toString(),
+          hasWorkout,
+          isRest,
+          isToday,
+          isCurrentMonth,
+          isSelected,
+          fullDate: currentDate,
+          workouts: []
+        });
+      }
+      
+      weeks.push(weekDays);
+    }
+    
+    return {
+      weeks,
+      monthName: firstDayOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      month: targetMonth,
+      year: targetYear
+    };
+  }, [selectedDate]);
+
+  // Stable months generation - only regenerate when currentDisplayMonth changes
+  const months = useMemo(() => [
+    generateMonthData(currentDisplayMonth.month, currentDisplayMonth.year, -1), // Previous month
+    generateMonthData(currentDisplayMonth.month, currentDisplayMonth.year, 0),  // Current month
+    generateMonthData(currentDisplayMonth.month, currentDisplayMonth.year, 1)   // Next month
+  ], [currentDisplayMonth.month, currentDisplayMonth.year, generateMonthData]);
+
+  // Update display month when props change
+  useEffect(() => {
+    if (currentMonth !== currentDisplayMonth.month || currentYear !== currentDisplayMonth.year) {
+      setCurrentDisplayMonth({ month: currentMonth, year: currentYear });
+    }
+  }, [currentMonth, currentYear, currentDisplayMonth.month, currentDisplayMonth.year]);
+
+  // Initialize scroll position on mount
+  useEffect(() => {
+    if (!isInitialized.current && scrollViewRef.current) {
+      const timer = setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            x: 1 * monthWidth, // Always start at center (index 1)
+            animated: false
+          });
+          isInitialized.current = true;
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [monthWidth]);
+
+  // Improved scroll handling
+  const handleScrollBegin = () => {
+    isScrolling.current = true;
+    if (scrollTimeout.current) {
+      clearTimeout(scrollTimeout.current);
+    }
+  };
+
+  // Add missing handleScroll function for SwipeableMonthView
+  const handleScroll = (event) => {
+    // This can be used for real-time scroll feedback if needed
+    // For now, we rely on handleScrollEnd for month changes
+  };
+
+  const handleScrollEnd = (event) => {
+    if (!isScrolling.current) return;
+    
+    const contentOffset = event.nativeEvent.contentOffset;
+    const newIndex = Math.round(contentOffset.x / monthWidth);
+    
+    // Ensure index is within bounds
+    const clampedIndex = Math.max(0, Math.min(newIndex, 2));
+    
+    // Debounce the scroll handling to prevent rapid changes
+    if (scrollTimeout.current) {
+      clearTimeout(scrollTimeout.current);
+    }
+    
+    scrollTimeout.current = setTimeout(() => {
+      // Only process if we moved to a different month
+      if (clampedIndex !== 1) {
+        let newMonth, newYear;
+        
+        if (clampedIndex === 0) {
+          // Swiped to previous month
+          const newDate = new Date(currentDisplayMonth.year, currentDisplayMonth.month - 1, 1);
+          newMonth = newDate.getMonth();
+          newYear = newDate.getFullYear();
+        } else if (clampedIndex === 2) {
+          // Swiped to next month
+          const newDate = new Date(currentDisplayMonth.year, currentDisplayMonth.month + 1, 1);
+          newMonth = newDate.getMonth();
+          newYear = newDate.getFullYear();
+        }
+        
+        if (newMonth !== undefined && newYear !== undefined) {
+          // Update current display state
+          setCurrentDisplayMonth({ month: newMonth, year: newYear });
+          
+          // Notify parent component
+          onMonthChange(newMonth, newYear);
+          
+          // Reset to center position after a brief delay
+          setTimeout(() => {
+            if (scrollViewRef.current && isScrolling.current) {
+              scrollViewRef.current.scrollTo({
+                x: 1 * monthWidth,
+                animated: false
+              });
+            }
+            isScrolling.current = false;
+          }, 150);
+        } else {
+          isScrolling.current = false;
+        }
+      } else {
+        isScrolling.current = false;
+      }
+    }, 100);
+  };
+
+  // Handle day selection with immediate response
+  const handleDayPress = (day) => {
+    if (onDaySelect && typeof onDaySelect === 'function') {
+      onDaySelect(day);
+    }
+  };
+
+  const renderMonth = (monthData, index) => (
+    <View key={`${monthData.month}-${monthData.year}-${index}`} style={[styles.swipeableMonthWrapper, { width: monthWidth }]}>
+      <View style={styles.monthHeader}>
+        <View style={styles.monthHeaderContent}>
+          <View style={styles.monthPlaceholder} />
+          <Text style={styles.monthTitle}>{monthData.monthName}</Text>
+          <TouchableOpacity 
+            style={styles.monthCollapseButton}
+            onPress={onToggleExpanded}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="chevron-up" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      {/* Day headers */}
+      <View style={styles.monthDayHeaders}>
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((dayName, headerIndex) => (
+          <View key={headerIndex} style={styles.monthDayHeader}>
+            <Text style={styles.monthDayHeaderText}>{dayName}</Text>
+          </View>
+        ))}
+      </View>
+      
+      {/* Calendar grid */}
+      <View style={styles.monthGrid}>
+        {monthData.weeks.map((week, weekIndex) => (
+          <View key={`${weekIndex}-${monthData.month}-${monthData.year}`} style={styles.monthWeekRow}>
+            {week.map((day, dayIndex) => (
+              <TouchableOpacity
+                key={`${weekIndex}-${dayIndex}-${day.fullDate.getTime()}`}
+                style={[
+                  styles.monthDayItem,
+                  day.isToday && styles.monthTodayDay,
+                  day.isSelected && styles.monthSelectedDay,
+                  !day.isCurrentMonth && styles.monthOtherMonthDay,
+                ]}
+                onPress={() => handleDayPress(day)}
+                activeOpacity={0.6}
+                hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+              >
+                <Text style={[
+                  styles.monthDayText,
+                  day.isToday && !day.isSelected && styles.monthTodayText,
+                  day.isSelected && styles.monthSelectedText,
+                  !day.isCurrentMonth && styles.monthOtherMonthText,
+                ]}>
+                  {day.date}
+                </Text>
+                
+                {/* Workout indicator */}
+                {day.isCurrentMonth && !day.isRest && (
+                  <MaterialCommunityIcons 
+                    name="dumbbell" 
+                    size={10} 
+                    color={day.isSelected ? '#fff' : '#000'} 
+                  />
+                )}
+                
+                {/* Rest day indicator */}
+                {day.isCurrentMonth && day.isRest && (
+                  <Text style={[
+                    styles.monthRestIndicator,
+                    day.isSelected && styles.monthRestIndicatorSelected
+                  ]}>
+                    R
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </View>
+      
+      {/* Swipe indicators */}
+      <View style={styles.swipeIndicators}>
+        <View style={styles.swipeIndicatorContainer}>
+          <MaterialCommunityIcons name="gesture-swipe-left" size={16} color="#999" />
+          <Text style={styles.swipeIndicatorText}>Previous</Text>
+        </View>
+        <View style={styles.monthIndicatorDots}>
+          {[0, 1, 2].map((dotIndex) => (
+            <View
+              key={dotIndex}
+              style={[
+                styles.monthIndicatorDot,
+                dotIndex === 1 && styles.monthIndicatorDotActive
+              ]}
+            />
+          ))}
+        </View>
+        <View style={styles.swipeIndicatorContainer}>
+          <Text style={styles.swipeIndicatorText}>Next</Text>
+          <MaterialCommunityIcons name="gesture-swipe-right" size={16} color="#999" />
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.swipeableMonthContainer}>
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={monthWidth}
+        decelerationRate="fast"
+        pagingEnabled
+        onScroll={handleScroll}
+        onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollEnd={handleScrollEnd}
+        scrollEventThrottle={32}
+        bounces={false}
+        removeClippedSubviews={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={false}
+      >
+        {months.map((monthData, index) => renderMonth(monthData, index))}
+      </ScrollView>
+    </View>
+  );
+};
 
 const WeekSchedule = ({ 
   onDaySelect, 
@@ -175,17 +670,45 @@ const WeekSchedule = ({
   externalWorkoutDays
 }) => {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  const [isMonthExpanded, setIsMonthExpanded] = useState(false);
+  const [currentMonthView, setCurrentMonthView] = useState(() => {
+    const today = new Date();
+    return {
+      month: today.getMonth(),
+      year: today.getFullYear()
+    };
+  });
+  
+  // Add stable month name state to prevent glitches
+  const [stableMonthName, setStableMonthName] = useState('');
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef(null);
+  
+  // Animation values
+  const weekViewOpacity = useRef(new Animated.Value(1)).current;
+  const monthViewOpacity = useRef(new Animated.Value(0)).current;
+  const weekViewScale = useRef(new Animated.Value(1)).current;
+  const monthViewScale = useRef(new Animated.Value(0.95)).current;
+  const weekViewTranslateY = useRef(new Animated.Value(0)).current;
+  const monthViewTranslateY = useRef(new Animated.Value(20)).current;
+  const containerHeight = useRef(new Animated.Value(170)).current; // Start with week view height
+  
+  // Add scroll position tracking for more responsive updates
+  const scrollX = useRef(new Animated.Value(0)).current;
+  
   const scrollViewRef = useRef(null);
   const compactScrollViewRef = useRef(null);
-  const screenWidth = Dimensions.get('window').width;
-  const weekWidth = screenWidth;
   const isInitialized = useRef(false);
-  const lastScrollIndex = useRef(2); // Track the last scroll position
+  const lastScrollIndex = useRef(currentScrollIndex);
 
-  // Define the fixed week range
-  const minWeekOffset = -2;
-  const maxWeekOffset = 2;
-  const totalWeeks = maxWeekOffset - minWeekOffset + 1; // 5 weeks total
+  // Constants for week generation
+  const totalWeeks = 5; // Show 5 weeks total (2 before, current, 2 after)
+  const minWeekOffset = -2; // Start 2 weeks before current
+  const maxWeekOffset = 2; // End 2 weeks after current
+  const weekWidth = Dimensions.get('window').width;
+
+  // Pre-calculate month names for all weeks to improve performance
+  const preCalculatedMonthNames = useRef(new Map());
 
   // Generate weeks from external data if provided
   const generateWeeksFromExternalData = () => {
@@ -419,39 +942,137 @@ const WeekSchedule = ({
         return generateSingleWeek(weekOffset);
       });
 
+  // Helper function to calculate stable month name with caching
+  const calculateStableMonthName = useCallback((weekIndex) => {
+    // Check cache first
+    if (preCalculatedMonthNames.current.has(weekIndex)) {
+      return preCalculatedMonthNames.current.get(weekIndex);
+    }
+
+    const currentWeek = weeks[weekIndex];
+    if (!currentWeek || currentWeek.length === 0) {
+      const fallbackName = new Date().toLocaleDateString('en-US', { month: 'long' });
+      preCalculatedMonthNames.current.set(weekIndex, fallbackName);
+      return fallbackName;
+    }
+    
+    // Use the same logic as WeekView: find the month that appears most frequently in the week
+    const monthCounts = {};
+    currentWeek.forEach(day => {
+      if (day.fullDate) {
+        const month = day.fullDate.getMonth();
+        monthCounts[month] = (monthCounts[month] || 0) + 1;
+      }
+    });
+
+    // Find the month with the highest count
+    const mostFrequentMonth = Object.keys(monthCounts).reduce((a, b) => 
+      monthCounts[a] > monthCounts[b] ? a : b
+    );
+    
+    // Get the year from the middle day of the week (Wednesday, index 2) or first day as fallback
+    const middleDayOfWeek = currentWeek[2]?.fullDate || currentWeek[0]?.fullDate || new Date();
+    
+    const displayDate = new Date(middleDayOfWeek);
+    displayDate.setMonth(parseInt(mostFrequentMonth));
+    
+    const monthName = displayDate.toLocaleDateString('en-US', { month: 'long' });
+    
+    // Cache the result
+    preCalculatedMonthNames.current.set(weekIndex, monthName);
+    return monthName;
+  }, [weeks]);
+
+  // Pre-calculate all month names when weeks change
+  useEffect(() => {
+    // Clear cache when weeks change
+    preCalculatedMonthNames.current.clear();
+    
+    // Pre-calculate month names for all weeks
+    weeks.forEach((_, index) => {
+      calculateStableMonthName(index);
+    });
+    
+    // Set initial stable month name
+    if (!stableMonthName) {
+      const initialMonthName = calculateStableMonthName(currentScrollIndex);
+      setStableMonthName(initialMonthName);
+    }
+  }, [weeks, calculateStableMonthName, currentScrollIndex, stableMonthName]);
+
+  // Add real-time scroll listener for immediate month text updates
+  useEffect(() => {
+    const listenerId = scrollX.addListener(({ value }) => {
+      const currentIndex = Math.round(value / weekWidth);
+      const clampedIndex = Math.max(0, Math.min(currentIndex, totalWeeks - 1));
+      
+      if (clampedIndex !== lastScrollIndex.current) {
+        const newMonthName = calculateStableMonthName(clampedIndex);
+        setStableMonthName(newMonthName);
+        lastScrollIndex.current = clampedIndex;
+      }
+    });
+
+    return () => {
+      scrollX.removeListener(listenerId);
+    };
+  }, [scrollX, weekWidth, totalWeeks, calculateStableMonthName]);
+
   // Initialize scroll position to center week (index 2)
   useEffect(() => {
     if (!isInitialized.current) {
       const targetRef = isCompact ? compactScrollViewRef : scrollViewRef;
       if (targetRef.current) {
         setTimeout(() => {
-          targetRef.current.scrollTo({
-            x: currentScrollIndex * weekWidth,
-            animated: false
-          });
-          lastScrollIndex.current = currentScrollIndex;
+          if (targetRef.current) {
+            targetRef.current.scrollTo({
+              x: currentScrollIndex * weekWidth,
+              animated: false
+            });
+            isInitialized.current = true;
+          }
         }, 100);
       }
-      isInitialized.current = true;
     }
-  }, [isCompact, weekWidth, currentScrollIndex]);
+  }, [currentScrollIndex, weekWidth, isCompact]);
 
-  // Handle external scroll commands
+  // Handle external scroll to index
   useEffect(() => {
-    if (scrollToIndex !== undefined && scrollToIndex !== lastScrollIndex.current) {
+    if (scrollToIndex !== undefined && isInitialized.current) {
       const targetRef = isCompact ? compactScrollViewRef : scrollViewRef;
-      if (targetRef.current && isInitialized.current) {
-        // console.log(`WeekSchedule ${isCompact ? 'compact' : 'normal'} syncing to index:`, scrollToIndex);
+      if (targetRef.current) {
         targetRef.current.scrollTo({
           x: scrollToIndex * weekWidth,
           animated: true
         });
-        lastScrollIndex.current = scrollToIndex;
       }
     }
-  }, [scrollToIndex, isCompact, weekWidth]);
+  }, [scrollToIndex, weekWidth, isCompact]);
 
-  const handleScrollEnd = (event) => {
+  // Handle scroll events for immediate month text updates with improved performance
+  const handleScroll = useCallback((event) => {
+    const contentOffset = event.nativeEvent.contentOffset;
+    const currentIndex = Math.round(contentOffset.x / weekWidth);
+    const clampedIndex = Math.max(0, Math.min(currentIndex, totalWeeks - 1));
+    
+    // Update month name immediately during scroll for responsive UI
+    if (clampedIndex !== lastScrollIndex.current) {
+      const newMonthName = calculateStableMonthName(clampedIndex);
+      setStableMonthName(newMonthName);
+      lastScrollIndex.current = clampedIndex;
+    }
+  }, [weekWidth, totalWeeks, calculateStableMonthName]);
+
+  // Create animated scroll event for better performance
+  const animatedScrollEvent = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+    { 
+      useNativeDriver: false,
+      listener: handleScroll
+    }
+  );
+
+  const handleScrollEnd = useCallback((event) => {
     const contentOffset = event.nativeEvent.contentOffset;
     const currentIndex = Math.round(contentOffset.x / weekWidth);
     
@@ -460,10 +1081,241 @@ const WeekSchedule = ({
     
     if (clampedIndex !== lastScrollIndex.current) {
       lastScrollIndex.current = clampedIndex;
+      
+      // Update stable month name immediately (no delay)
+      const newMonthName = calculateStableMonthName(clampedIndex);
+      setStableMonthName(newMonthName);
+      setIsScrolling(false);
+      
       // Notify parent component about scroll change
       if (onScrollChange && clampedIndex !== currentScrollIndex) {
         onScrollChange(clampedIndex);
       }
+      
+      // Update current week offset for internal tracking
+      const newOffset = minWeekOffset + clampedIndex;
+      setCurrentWeekOffset(newOffset);
+    }
+  }, [weekWidth, totalWeeks, calculateStableMonthName, onScrollChange, currentScrollIndex, minWeekOffset]);
+
+  // Add scroll begin handler to set scrolling state
+  const handleScrollBegin = useCallback(() => {
+    setIsScrolling(true);
+    // Clear any pending timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Get current month and year for month view
+  const getCurrentMonthInfo = useCallback(() => {
+    const today = new Date();
+    const currentWeek = weeks[currentScrollIndex] || weeks[2]; // Fallback to center week
+    
+    if (!currentWeek || currentWeek.length === 0) {
+      return {
+        month: today.getMonth(),
+        year: today.getFullYear(),
+        monthName: today.toLocaleDateString('en-US', { month: 'long' })
+      };
+    }
+    
+    // Use the same logic as WeekView: find the month that appears most frequently in the week
+    const monthCounts = {};
+    currentWeek.forEach(day => {
+      if (day.fullDate) {
+        const month = day.fullDate.getMonth();
+        monthCounts[month] = (monthCounts[month] || 0) + 1;
+      }
+    });
+    
+    // Find the month with the highest count
+    const mostFrequentMonth = Object.keys(monthCounts).reduce((a, b) => 
+      monthCounts[a] > monthCounts[b] ? a : b
+    );
+    
+    // Get the year from the middle day of the week (Wednesday, index 2) or first day as fallback
+    const middleDayOfWeek = currentWeek[2]?.fullDate || currentWeek[0]?.fullDate || today;
+    
+    const displayDate = new Date(middleDayOfWeek);
+    displayDate.setMonth(parseInt(mostFrequentMonth));
+    
+    return {
+      month: parseInt(mostFrequentMonth),
+      year: displayDate.getFullYear(),
+      monthName: displayDate.toLocaleDateString('en-US', { month: 'long' })
+    };
+  }, [weeks, currentScrollIndex]);
+
+  // Memoize month info to prevent unnecessary recalculations
+  const monthInfo = useMemo(() => {
+    if (stableMonthName) {
+      return { monthName: stableMonthName };
+    }
+    return getCurrentMonthInfo();
+  }, [stableMonthName, getCurrentMonthInfo]);
+
+  const handleMonthToggle = () => {
+    if (!isMonthExpanded) {
+      // When expanding to month view, sync with current week
+      const { month, year } = getCurrentMonthInfo();
+      setCurrentMonthView({ month, year });
+      
+      // Animate to month view with spring animations
+      Animated.parallel([
+        // Animate container height to month view size
+        Animated.spring(containerHeight, {
+          toValue: 450, // Height for month view
+          tension: 100,
+          friction: 8,
+          useNativeDriver: false, // Height animation requires native driver false
+        }),
+        // Fade out week view
+        Animated.spring(weekViewOpacity, {
+          toValue: 0,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        // Scale down week view slightly
+        Animated.spring(weekViewScale, {
+          toValue: 0.9,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        // Move week view up
+        Animated.spring(weekViewTranslateY, {
+          toValue: -30,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        // Fade in month view with delay
+        Animated.sequence([
+          Animated.delay(100),
+          Animated.spring(monthViewOpacity, {
+            toValue: 1,
+            tension: 120,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        // Scale up month view
+        Animated.sequence([
+          Animated.delay(100),
+          Animated.spring(monthViewScale, {
+            toValue: 1,
+            tension: 120,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        // Move month view to center
+        Animated.sequence([
+          Animated.delay(100),
+          Animated.spring(monthViewTranslateY, {
+            toValue: 0,
+            tension: 120,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+      ]).start(() => {
+        setIsMonthExpanded(true);
+      });
+    } else {
+      // Animate back to week view with spring animations
+      Animated.parallel([
+        // Animate container height back to week view size
+        Animated.spring(containerHeight, {
+          toValue: 170, // Height for week view
+          tension: 100,
+          friction: 8,
+          useNativeDriver: false, // Height animation requires native driver false
+        }),
+        // Fade in week view with delay
+        Animated.sequence([
+          Animated.delay(100),
+          Animated.spring(weekViewOpacity, {
+            toValue: 1,
+            tension: 120,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        // Scale up week view
+        Animated.sequence([
+          Animated.delay(100),
+          Animated.spring(weekViewScale, {
+            toValue: 1,
+            tension: 120,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        // Move week view back to center
+        Animated.sequence([
+          Animated.delay(100),
+          Animated.spring(weekViewTranslateY, {
+            toValue: 0,
+            tension: 120,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        // Fade out month view
+        Animated.spring(monthViewOpacity, {
+          toValue: 0,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        // Scale down month view
+        Animated.spring(monthViewScale, {
+          toValue: 0.9,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        // Move month view down
+        Animated.spring(monthViewTranslateY, {
+          toValue: 30,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setIsMonthExpanded(false);
+      });
+    }
+  };
+
+  // Handle month navigation in month view
+  const handleMonthChange = (newMonth, newYear) => {
+    setCurrentMonthView({
+      month: newMonth,
+      year: newYear
+    });
+  };
+
+  // Improved day selection handler to prevent double-click issues
+  const handleDaySelection = (day) => {
+    // Ensure immediate response
+    if (onDaySelect && typeof onDaySelect === 'function') {
+      // Use setTimeout to ensure the selection happens on next tick
+      setTimeout(() => {
+        onDaySelect(day);
+      }, 0);
     }
   };
 
@@ -477,8 +1329,10 @@ const WeekSchedule = ({
           snapToInterval={weekWidth}
           decelerationRate="fast"
           pagingEnabled
+          onScroll={animatedScrollEvent}
+          onScrollBeginDrag={handleScrollBegin}
           onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
+          scrollEventThrottle={1}
           bounces={false}
         >
           {weeks.map((weekDays, weekIndex) => (
@@ -486,9 +1340,12 @@ const WeekSchedule = ({
               <WeekView
                 days={weekDays}
                 selectedDate={selectedDate}
-                onDaySelect={onDaySelect}
+                onDaySelect={handleDaySelection}
                 weekOffset={minWeekOffset + weekIndex}
                 isCompact={true}
+                onMonthToggle={handleMonthToggle}
+                isMonthExpanded={isMonthExpanded}
+                monthInfo={monthInfo}
               />
             </View>
           ))}
@@ -498,94 +1355,151 @@ const WeekSchedule = ({
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        ref={scrollViewRef}
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={weekWidth}
-        decelerationRate="fast"
-        pagingEnabled
-        onMomentumScrollEnd={handleScrollEnd}
-        scrollEventThrottle={16}
-        bounces={false}
+    <Animated.View style={[styles.container, { height: containerHeight }]}>
+      {/* Week View - Always rendered but animated */}
+      <Animated.View 
+        style={[
+          styles.weekViewContainer,
+          {
+            opacity: weekViewOpacity,
+            transform: [
+              { scale: weekViewScale },
+              { translateY: weekViewTranslateY }
+            ]
+          }
+        ]}
+        pointerEvents={isMonthExpanded ? 'none' : 'auto'}
       >
-        {weeks.map((weekDays, weekIndex) => (
-          <View key={`week-${minWeekOffset + weekIndex}`} style={styles.weekWrapper}>
-            <WeekView
-              days={weekDays}
-              selectedDate={selectedDate}
-              onDaySelect={onDaySelect}
-              weekOffset={minWeekOffset + weekIndex}
-              isCompact={false}
-            />
-          </View>
-        ))}
-      </ScrollView>
-    </View>
+        <ScrollView 
+          ref={scrollViewRef}
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={weekWidth}
+          decelerationRate="fast"
+          pagingEnabled
+          onScroll={animatedScrollEvent}
+          onScrollBeginDrag={handleScrollBegin}
+          onMomentumScrollEnd={handleScrollEnd}
+          scrollEventThrottle={1}
+          bounces={false}
+        >
+          {weeks.map((weekDays, weekIndex) => (
+            <View key={`week-${minWeekOffset + weekIndex}`} style={styles.weekWrapper}>
+              <WeekView
+                days={weekDays}
+                selectedDate={selectedDate}
+                onDaySelect={handleDaySelection}
+                weekOffset={minWeekOffset + weekIndex}
+                isCompact={false}
+                onMonthToggle={handleMonthToggle}
+                isMonthExpanded={isMonthExpanded}
+                monthInfo={monthInfo}
+              />
+            </View>
+          ))}
+        </ScrollView>
+      </Animated.View>
+
+      {/* Month View - Always rendered but animated */}
+      <Animated.View 
+        style={[
+          styles.monthViewContainer,
+          {
+            opacity: monthViewOpacity,
+            transform: [
+              { scale: monthViewScale },
+              { translateY: monthViewTranslateY }
+            ]
+          }
+        ]}
+        pointerEvents={isMonthExpanded ? 'auto' : 'none'}
+      >
+        <SwipeableMonthView
+          selectedDate={selectedDate}
+          onDaySelect={handleDaySelection}
+          currentMonth={currentMonthView.month}
+          currentYear={currentMonthView.year}
+          onMonthChange={handleMonthChange}
+          onToggleExpanded={handleMonthToggle}
+        />
+      </Animated.View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 12,
+    paddingTop: 20,
+    paddingBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
   weekWrapper: {
-    width: Dimensions.get('window').width,
-    paddingHorizontal: 6,
-  },
-  weekContainer: {
-    width: '100%',
+    width: SCREEN_WIDTH,
+    paddingHorizontal: 20,
     alignItems: 'center',
+    paddingBottom: 8,
   },
   weekHeader: {
     width: '100%',
-    paddingHorizontal: 12,
+    marginTop: 12,
+    paddingHorizontal: 6,
     marginBottom: 12,
   },
-  weekTopRow: {
+  weekInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  weekNumberContainer: {
-    flexDirection: 'row',
+  weekNumberBadge: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
     alignItems: 'center',
   },
   weekNumberLabel: {
-    fontSize: 15,
+    fontSize: 11,
     color: '#666',
-    marginRight: 6,
     fontWeight: '500',
   },
   weekNumberValue: {
-    fontSize: 22,
-    color: '#000',
+    fontSize: 16,
+    color: '#333',
     fontWeight: 'bold',
   },
-  weekStatusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
+  monthDisplay: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  weekStatusText: {
-    fontSize: 13,
+  monthText: {
+    fontSize: 15,
+    color: '#333',
     fontWeight: '600',
   },
   daysWrapper: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
   dayItem: {
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 18,
-    padding: 6,
-    paddingBottom: 10,
-    width: 38,
-    height: 100,
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    minWidth: 44,
+    minHeight: 70,
     marginHorizontal: 1,
   },
   selectedDay: {
@@ -598,56 +1512,34 @@ const styles = StyleSheet.create({
     borderColor: '#000',
   },
   dayText: {
-    fontSize: 14,
-    marginBottom: 3,
+    fontSize: 12,
     color: '#666',
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   dateText: {
-    fontSize: 13,
-    marginBottom: 6,
-    color: '#666',
+    fontSize: 16,
+    color: '#333',
+    fontWeight: 'bold',
+    marginBottom: 4,
   },
   selectedText: {
     color: '#fff',
-    fontWeight: '600',
   },
   todayText: {
     color: '#000',
     fontWeight: 'bold',
   },
-  iconContainer: {
-    marginBottom: 6,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  workoutIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
   },
-  restText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 'auto',
-    marginBottom: 4,
-  },
-  timeText: {
-    fontSize: 11,
-    marginLeft: 2,
-    color: '#666',
-  },
-  // Compact mode styles
-  compactContainer: {
+  workoutIndicatorSelected: {
     backgroundColor: '#fff',
   },
-  compactWeekWrapper: {
-    width: Dimensions.get('window').width,
-  },
-  compactWeekContainer: {
-    paddingHorizontal: 16,
+  compactContainer: {
     paddingVertical: 8,
     paddingBottom: 12,
     backgroundColor: '#fff',
@@ -665,15 +1557,22 @@ const styles = StyleSheet.create({
   compactDaysWrapper: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 2,
+    paddingHorizontal: 20,
+  },
+  compactWeekWrapper: {
+    width: SCREEN_WIDTH,
+  },
+  compactWeekContainer: {
+    width: '100%',
   },
   compactDayItem: {
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 10,
     backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 4,
-    width: 36,
-    height: 50,
+    minWidth: 40,
+    minHeight: 60,
     marginHorizontal: 1,
     marginTop: 12,
     shadowColor: '#000',
@@ -711,30 +1610,34 @@ const styles = StyleSheet.create({
   },
   compactDayText: {
     fontSize: 11,
-    marginBottom: 1,
     color: '#666',
     fontWeight: '600',
     letterSpacing: 0.1,
   },
   compactDateText: {
-    fontSize: 10,
-    marginBottom: 3,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#333',
+    fontWeight: 'bold',
+    marginBottom: 2,
   },
   compactSelectedText: {
     color: '#fff',
-    fontWeight: '700',
   },
   compactTodayText: {
     color: '#000',
     fontWeight: 'bold',
   },
+  compactIndicatorContainer: {
+    marginTop: 2,
+    minHeight: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   compactWorkoutIndicator: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#000',
+    backgroundColor: '#4CAF50',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -747,6 +1650,192 @@ const styles = StyleSheet.create({
   compactWorkoutIndicatorSelected: {
     backgroundColor: '#fff',
     shadowColor: '#fff',
+  },
+  monthDayHeaders: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  monthDayHeader: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  monthDayHeaderText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#666',
+    textAlign: 'center',
+  },
+  monthGrid: {
+    // Vertical stacking of weeks
+  },
+  monthWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  monthDayItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    minHeight: 50,
+    borderRadius: 12,
+    marginHorizontal: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  monthTodayDay: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  monthSelectedDay: {
+    backgroundColor: '#000',
+  },
+  monthOtherMonthDay: {
+    opacity: 0.3,
+  },
+  monthDayText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  monthTodayText: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  monthSelectedText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  monthOtherMonthText: {
+    color: '#999',
+  },
+  monthWorkoutIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+  },
+  monthWorkoutIndicatorSelected: {
+    backgroundColor: '#fff',
+  },
+  monthRestIndicator: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  monthRestIndicatorSelected: {
+    color: '#fff',
+  },
+  monthToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  monthNavButton: {
+    marginHorizontal: 12,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  monthContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  monthHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  monthHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  swipeableMonthContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  swipeableMonthWrapper: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  swipeIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+  },
+  swipeIndicatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  swipeIndicatorText: {
+    fontSize: 15,
+    color: '#666',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  monthIndicatorDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  monthIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#999',
+    marginHorizontal: 4,
+  },
+  monthIndicatorDotActive: {
+    backgroundColor: '#000',
+  },
+  monthCollapseButton: {
+    marginHorizontal: 12,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  monthPlaceholder: {
+    width: 48,
+    marginHorizontal: 12,
+  },
+  weekViewContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  monthViewContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  indicatorContainer: {
+    marginTop: 2,
+    minHeight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
