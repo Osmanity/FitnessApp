@@ -361,6 +361,7 @@ const PlansScreen = ({ navigation }) => {
     totalWorkouts: 0,
     currentStreak: 0
   });
+  const [showQuickActions, setShowQuickActions] = useState(false);
   
   // Scroll synchronization state
   const [currentScrollIndex, setCurrentScrollIndex] = useState(2);
@@ -374,6 +375,7 @@ const PlansScreen = ({ navigation }) => {
   const screenWidth = Dimensions.get('window').width;
 
   const scrollY = useSharedValue(0);
+  const quickActionsHeight = useSharedValue(0);
 
   // Auto-select today's date on component mount
   useEffect(() => {
@@ -398,6 +400,15 @@ const PlansScreen = ({ navigation }) => {
       .filter(key => key.includes('-') && workoutProgress[key] === true)
       .length;
     return Math.min(recentWorkouts, 7);
+  };
+
+  const toggleQuickActions = () => {
+    setShowQuickActions(prev => !prev);
+    quickActionsHeight.value = withSpring(showQuickActions ? 0 : 60, {
+      damping: 20,
+      stiffness: 150
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleDaySelect = (day) => {
@@ -723,8 +734,44 @@ const PlansScreen = ({ navigation }) => {
     },
   });
 
-  // Animated styles for the sticky header
-  const stickyHeaderStyle = useAnimatedStyle(() => {
+  // Animated styles for quick actions
+  const quickActionsStyle = useAnimatedStyle(() => {
+    const height = interpolate(
+      quickActionsHeight.value,
+      [0, 60],
+      [0, 60],
+      Extrapolate.CLAMP
+    );
+
+    const opacity = interpolate(
+      quickActionsHeight.value,
+      [0, 35, 60],
+      [0, 0.5, 1],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      height: withTiming(height, { duration: 300 }),
+      opacity: withTiming(opacity, { duration: 300 }),
+      overflow: 'hidden',
+    };
+  });
+
+  // Dynamic sticky header positioning
+  const stickyHeaderAnimatedStyle = useAnimatedStyle(() => {
+    // Only apply extra spacing when sticky header is visible (scrolled)
+    const isScrolled = scrollY.value > 40;
+    
+    const baseTopPosition = interpolate(
+      quickActionsHeight.value,
+      [0, 60],
+      [110, 170],
+      Extrapolate.CLAMP
+    );
+
+    // Only apply the extra positioning when sticky header is visible
+    const topPosition = isScrolled ? baseTopPosition : 110;
+
     const opacity = interpolate(
       scrollY.value,
       [0, 40, 80],
@@ -747,6 +794,7 @@ const PlansScreen = ({ navigation }) => {
     );
 
     return {
+      top: withTiming(topPosition, { duration: 300 }),
       opacity: withTiming(opacity, { duration: 200 }),
       transform: [
         { translateY: withSpring(translateY, { damping: 25, stiffness: 200 }) },
@@ -789,15 +837,24 @@ const PlansScreen = ({ navigation }) => {
 
   // Animated styles for the content container
   const contentStyle = useAnimatedStyle(() => {
-    const paddingTop = interpolate(
+    const basePaddingTop = interpolate(
       scrollY.value,
       [0, 80],
-      [0, 60],
+      [0, 5],
       Extrapolate.CLAMP
     );
 
+    // Only apply extra padding when sticky header is visible
+    const isScrolled = scrollY.value > 40;
+    const extraPadding = isScrolled ? interpolate(
+      quickActionsHeight.value,
+      [0, 10],
+      [0, 60],
+      Extrapolate.CLAMP
+    ) : 0;
+
     return {
-      paddingTop: withTiming(paddingTop, { duration: 200 }),
+      paddingTop: withTiming(basePaddingTop + extraPadding, { duration: 200 }),
     };
   });
 
@@ -827,10 +884,14 @@ const PlansScreen = ({ navigation }) => {
               <MaterialCommunityIcons name="history" size={24} color="#000" />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('WorkoutTemplates')}
+              style={[styles.headerButton, showQuickActions && styles.headerButtonActive]}
+              onPress={toggleQuickActions}
             >
-              <MaterialCommunityIcons name="view-grid-plus" size={24} color="#000" />
+              <MaterialCommunityIcons 
+                name={showQuickActions ? "close" : "view-grid-plus"} 
+                size={24} 
+                color="#000"
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -840,9 +901,36 @@ const PlansScreen = ({ navigation }) => {
             <Text style={styles.streakText}>{currentStreak} day streak!</Text>
           </View>
         )}
+        
+        {/* Quick Action Cards - toggleable */}
+        <Animated.View style={[styles.quickActions, quickActionsStyle]}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Progress')}
+          >
+            <MaterialCommunityIcons name="trending-up" size={24} color="#4CAF50" />
+            <Text style={styles.actionText}>Progress</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('WorkoutHistory')}
+          >
+            <MaterialCommunityIcons name="history" size={24} color="#2196F3" />
+            <Text style={styles.actionText}>History</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('WorkoutTemplates')}
+          >
+            <MaterialCommunityIcons name="dumbbell" size={24} color="#FF6B35" />
+            <Text style={styles.actionText}>Templates</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </Animated.View>
       {/* Sticky Header */}
-      <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]}>
+      <Animated.View style={[styles.stickyHeader, stickyHeaderAnimatedStyle]}>
         <WeekSchedule 
           onDaySelect={handleDaySelect} 
           selectedDate={selectedDay?.fullDate?.toDateString()}
@@ -873,33 +961,6 @@ const PlansScreen = ({ navigation }) => {
             />
           </Animated.View>
           
-          {/* Quick Action Cards - moved here for better UX */}
-          <View style={styles.quickActions}>
-            <TouchableOpacity 
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('Progress')}
-            >
-              <MaterialCommunityIcons name="trending-up" size={24} color="#4CAF50" />
-              <Text style={styles.actionText}>Progress</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('WorkoutHistory')}
-            >
-              <MaterialCommunityIcons name="history" size={24} color="#2196F3" />
-              <Text style={styles.actionText}>History</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('WorkoutTemplates')}
-            >
-              <MaterialCommunityIcons name="dumbbell" size={24} color="#FF6B35" />
-              <Text style={styles.actionText}>Templates</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Enhanced Swipeable Day Schedule with Previews */}
           <View style={styles.swipeWrapper}>
             {/* Previous Day Card */}
@@ -1055,7 +1116,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 8,
     paddingTop: 0,
     marginTop: -10,
     borderBottomWidth: 1,
@@ -1090,6 +1151,11 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 12,
   },
+  headerButtonActive: {
+    backgroundColor: '#D4F4D4',
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
   streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1114,37 +1180,41 @@ const styles = StyleSheet.create({
   // Quick Action Cards
   quickActions: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginTop: 16,
-    marginBottom: 8,
+    paddingHorizontal: 0,
+    marginTop: 12,
     gap: 12,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   actionCard: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginHorizontal: 0,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    minHeight: 60,
   },
   actionText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    color: '#495057',
   },
   stickyHeader: {
     position: 'absolute',
-    top: 100,
+    top: 120,
     left: 0,
     right: 0,
     backgroundColor: '#fff',
