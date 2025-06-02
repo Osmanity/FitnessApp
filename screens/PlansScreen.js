@@ -1110,7 +1110,7 @@ const PlansScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
     paddingTop: 10,
   },
   header: {
