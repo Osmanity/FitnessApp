@@ -12,6 +12,8 @@ import FoodScreen from '../screens/FoodScreen';
 import SocialScreen from '../screens/SocialScreen';
 import MenuScreen from '../screens/MenuScreen';
 import AvatarScreen from '../screens/AvatarScreen';
+import MealSelectionScreen from '../screens/MealSelectionScreen';
+import WorkoutScreen from '../screens/WorkoutScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -23,6 +25,8 @@ const PlansStack = () => {
       <Stack.Screen name="PlansMain" component={PlansScreen} />
       <Stack.Screen name="WorkoutHistory" component={WorkoutHistoryScreen} />
       <Stack.Screen name="WorkoutTemplates" component={WorkoutTemplatesScreen} />
+      <Stack.Screen name="MealSelection" component={MealSelectionScreen} />
+      <Stack.Screen name="Workout" component={WorkoutScreen} />
     </Stack.Navigator>
   );
 };
