@@ -757,7 +757,7 @@ const PlansScreen = ({ navigation }) => {
     };
   });
 
-  // Dynamic sticky header positioning
+  // Dynamic sticky header positioning - Combined with stats
   const stickyHeaderAnimatedStyle = useAnimatedStyle(() => {
     // Only apply extra spacing when sticky header is visible (scrolled)
     const isScrolled = scrollY.value > 40;
@@ -849,7 +849,7 @@ const PlansScreen = ({ navigation }) => {
     const extraPadding = isScrolled ? interpolate(
       quickActionsHeight.value,
       [0, 10],
-      [0, 60],
+      [0, 60], // Reduced since stats are now part of header
       Extrapolate.CLAMP
     ) : 0;
 
@@ -866,6 +866,32 @@ const PlansScreen = ({ navigation }) => {
   });
 
   const { currentStreak } = workoutStats;
+
+  // Calculate daily statistics for sticky compact dashboard
+  const calculateDailyStats = () => {
+    if (!selectedDay) return { workouts: '0/0', meals: '0/6', sleep: '0/1' };
+    
+    const totalWorkouts = selectedDay.workouts?.length || 0;
+    const completedWorkouts = selectedDay.workouts?.filter(workout => 
+      workoutProgress[workout.id]
+    ).length || 0;
+    
+    // Mock meal and sleep data for now - in real app this would come from state
+    const totalMeals = 6;
+    const completedMeals = Math.floor(Math.random() * (totalMeals + 1)); // Mock data
+    const sleepLogged = Math.random() > 0.5 ? 1 : 0; // Mock data
+    
+    return {
+      workouts: `${completedWorkouts}/${totalWorkouts}`,
+      meals: `${completedMeals}/${totalMeals}`,
+      sleep: `${sleepLogged}/1`,
+      workoutProgress: totalWorkouts > 0 ? (completedWorkouts / totalWorkouts) * 100 : 0,
+      mealProgress: (completedMeals / totalMeals) * 100,
+      sleepProgress: sleepLogged * 100
+    };
+  };
+
+  const dailyStats = calculateDailyStats();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -940,6 +966,28 @@ const PlansScreen = ({ navigation }) => {
           scrollToIndex={scrollToIndex}
           externalWorkoutDays={allWorkoutDays}
         />
+        
+        {/* Compact Statistics Dashboard */}
+        <View style={styles.compactStatsContainer}>
+          <View style={styles.compactStatItem}>
+            <MaterialCommunityIcons name="dumbbell" size={12} color="#000" />
+            <Text style={styles.compactStatValue}>{dailyStats.workouts}</Text>
+          </View>
+          
+          <View style={styles.compactStatDivider} />
+          
+          <View style={styles.compactStatItem}>
+            <MaterialCommunityIcons name="food" size={12} color="#000" />
+            <Text style={styles.compactStatValue}>{dailyStats.meals}</Text>
+          </View>
+          
+          <View style={styles.compactStatDivider} />
+          
+          <View style={styles.compactStatItem}>
+            <MaterialCommunityIcons name="sleep" size={12} color="#000" />
+            <Text style={styles.compactStatValue}>{dailyStats.sleep}</Text>
+          </View>
+        </View>
       </Animated.View>
 
       <Animated.ScrollView 
@@ -1056,48 +1104,6 @@ const PlansScreen = ({ navigation }) => {
                 onExerciseDataUpdate={handleExerciseDataUpdate}
                 navigation={navigation}
               />
-              
-                {/* Enhanced Swipe indicators */}
-              <View style={styles.swipeIndicators}>
-                {currentDayIndex > 0 && (
-                  <View style={styles.swipeIndicatorLeft}>
-                      <MaterialCommunityIcons name="gesture-swipe-right" size={18} color="#FF6B35" />
-                      <Text style={styles.swipeIndicatorText}>Swipe Right</Text>
-                  </View>
-                )}
-                
-                {/* Current day indicator */}
-                <View style={styles.currentDayIndicator}>
-                  <View style={styles.currentDayInfo}>
-                    <Text style={styles.currentDayText}>
-                      {selectedDay?.fullDate?.toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </Text>
-                    {selectedDay?.isToday && (
-                      <View style={styles.todayBadge}>
-                        <Text style={styles.todayBadgeText}>Today</Text>
-                      </View>
-                    )}
-                  </View>
-                  {selectedDay?.isRest ? (
-                    <Text style={styles.restDayText}>Rest Day</Text>
-                  ) : (
-                    <Text style={styles.workoutDayText}>
-                      {selectedDay?.workouts?.length || 0} workout{selectedDay?.workouts?.length !== 1 ? 's' : ''}
-                    </Text>
-                  )}
-                </View>
-                
-                {currentDayIndex < allWorkoutDays.length - 1 && (
-                  <View style={styles.swipeIndicatorRight}>
-                      <Text style={styles.swipeIndicatorText}>Swipe Left</Text>
-                      <MaterialCommunityIcons name="gesture-swipe-left" size={18} color="#4CAF50" />
-                  </View>
-                )}
-              </View>
             </Animated.View>
           </PanGestureHandler>
           </View>
@@ -1251,96 +1257,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  swipeIndicators: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 10,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    marginHorizontal: 20,
-  },
-  swipeIndicatorLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    opacity: 0.8,
-    backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  swipeIndicatorRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    opacity: 0.8,
-    backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  swipeIndicatorText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  currentDayIndicator: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  currentDayInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  currentDayText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-  },
-  todayBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  todayBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  restDayText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  workoutDayText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#4CAF50',
-  },
   swipeWrapper: {
     flex: 1,
     position: 'relative',
@@ -1445,6 +1361,60 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#495057',
     flex: 1,
+  },
+  stickyStats: {
+    position: 'absolute',
+    top: 240,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    zIndex: 5,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  compactStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    marginHorizontal: 16,
+  },
+  compactStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compactStatValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#495057',
+  },
+  compactProgressBar: {
+    height: 12,
+    width: 60,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  compactProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  compactStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e9ecef',
   },
 });
 

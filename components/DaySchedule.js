@@ -320,15 +320,7 @@ const AdvancedStats = ({ visible, onClose, dayStats, weeklyProgress }) => {
   );
 };
 
-const ExerciseGroup = ({ workout, workoutProgress, onExerciseComplete, onWorkoutComplete, exerciseData, onExerciseDataUpdate }) => {
-  const [restTimerActive, setRestTimerActive] = useState(false);
-  const [workoutTimerActive, setWorkoutTimerActive] = useState(false);
-  const [workoutStartTime, setWorkoutStartTime] = useState(null);
-  const [selectedExercise, setSelectedExercise] = useState(null);
-  const [notesModalVisible, setNotesModalVisible] = useState(false);
-  const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-
+const ExerciseGroup = ({ workout, workoutProgress, onExerciseComplete, onWorkoutComplete, exerciseData, onExerciseDataUpdate, navigation, selectedDate }) => {
   const completedExercises = workout.exercises.filter(ex => workoutProgress[ex.id]).length;
   const totalExercises = workout.exercises.length;
   const isWorkoutCompleted = completedExercises === totalExercises && totalExercises > 0;
@@ -341,98 +333,28 @@ const ExerciseGroup = ({ workout, workoutProgress, onExerciseComplete, onWorkout
     return total + (weight * exercise.sets * exercise.reps);
   }, 0);
 
-  const handleExerciseComplete = (exerciseId) => {
-    if (!workoutProgress[exerciseId]) {
-      onExerciseComplete(exerciseId);
-      
-      // Start workout timer on first exercise
-      if (completedExercises === 0) {
-        setWorkoutTimerActive(true);
-        setWorkoutStartTime(Date.now());
-      }
-      
-      // Start rest timer after completing an exercise (except the last one)
-      const newCompletedCount = completedExercises + 1;
-      if (newCompletedCount < totalExercises) {
-        setRestTimerActive(true);
-      }
-      
-      // Check if this completes the workout
-      if (newCompletedCount === totalExercises) {
-        setWorkoutTimerActive(false);
-        setTimeout(() => {
-          onWorkoutComplete(workout.id);
-        }, 500);
-      }
+  const handleStartWorkout = () => {
+    if (navigation) {
+      navigation.navigate('Workout', {
+        workout: workout,
+        selectedDate: selectedDate
+      });
     }
   };
 
-  const handleExerciseLongPress = (exercise) => {
-    setSelectedExercise(exercise);
-    setNotesModalVisible(true);
-  };
-
-  const handleShowHistory = (exerciseId) => {
-    setSelectedExerciseId(exerciseId);
-    setHistoryModalVisible(true);
-  };
-
-  const handleExerciseDataSave = (exerciseId, data) => {
-    // Add to history
-    const currentData = exerciseData[exerciseId] || {};
-    const history = currentData.history || [];
-    
-    const newEntry = {
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-      weight: data.weight,
-      sets: workout.exercises.find(ex => ex.id === exerciseId)?.sets || 0,
-      reps: workout.exercises.find(ex => ex.id === exerciseId)?.reps || 0,
-      notes: data.notes,
-      rpe: data.rpe || null
-    };
-
-    const updatedData = {
-      ...data,
-      lastWeight: currentData.weight,
-      history: [newEntry, ...history.slice(0, 9)] // Keep last 10 entries
-    };
-
-    onExerciseDataUpdate(exerciseId, updatedData);
-  };
-
-  const handleRestComplete = () => {
-    setRestTimerActive(false);
-    Alert.alert('Rest Complete!', 'Time for your next set! 💪');
-  };
-
-  const handleWorkoutStop = () => {
-    Alert.alert(
-      'Stop Workout?',
-      'Are you sure you want to stop the current workout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Stop', 
-          style: 'destructive',
-          onPress: () => {
-            setWorkoutTimerActive(false);
-            setRestTimerActive(false);
-          }
-        }
-      ]
-    );
-  };
-
   return (
-    <View style={[styles.exerciseGroup, isWorkoutCompleted && styles.exerciseGroupCompleted]}>
+    <TouchableOpacity 
+      style={[styles.exerciseGroup, isWorkoutCompleted && styles.exerciseGroupCompleted]}
+      onPress={handleStartWorkout}
+      activeOpacity={0.8}
+    >
       <View style={styles.groupHeader}>
         <View style={styles.groupTitleContainer}>
           <Text style={styles.groupTitle}>{workout.group}</Text>
           <View style={styles.groupMetrics}>
             <Text style={styles.groupDuration}>{workout.duration} min</Text>
-            <Text style={styles.exerciseCount}>{totalExercises} exercises</Text>
-            <Text style={styles.volumeText}>{Math.round(estimatedVolume)}kg volume</Text>
+            <Text style={styles.exerciseCount}>{totalExercises} övningar</Text>
+            <Text style={styles.volumeText}>{Math.round(estimatedVolume)}kg volym</Text>
           </View>
         </View>
         <View style={styles.progressContainer}>
@@ -450,284 +372,565 @@ const ExerciseGroup = ({ workout, workoutProgress, onExerciseComplete, onWorkout
         </View>
       </View>
 
-      {/* Timers */}
-      <WorkoutTimer 
-        isActive={workoutTimerActive}
-        onStop={handleWorkoutStop}
-        startTime={workoutStartTime}
-      />
-      <RestTimer 
-        isActive={restTimerActive}
-        duration={90}
-        onComplete={handleRestComplete}
-        onStop={() => setRestTimerActive(false)}
-      />
-      
-      <View style={styles.exerciseList}>
-        {workout.exercises.map((exercise, index) => (
-          <ExerciseItem
-            key={exercise.id}
-            exercise={exercise}
-            onComplete={handleExerciseComplete}
-            onLongPress={handleExerciseLongPress}
-            onShowHistory={handleShowHistory}
-            isCompleted={workoutProgress[exercise.id]}
-            exerciseData={exerciseData[exercise.id] || {}}
-          />
+      <View style={styles.exercisePreview}>
+        <Text style={styles.exercisePreviewTitle}>Övningar:</Text>
+        {workout.exercises.slice(0, 3).map((exercise, index) => (
+          <Text key={exercise.id} style={styles.exercisePreviewItem}>
+            • {exercise.name} ({exercise.sets}×{exercise.reps})
+          </Text>
         ))}
+        {workout.exercises.length > 3 && (
+          <Text style={styles.exercisePreviewMore}>
+            +{workout.exercises.length - 3} fler övningar
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.startWorkoutButton}>
+        <MaterialCommunityIcons name="play" size={20} color="#fff" />
+        <Text style={styles.startWorkoutText}>
+          {isWorkoutCompleted ? 'Visa Träning' : 'Starta Träning'}
+        </Text>
+        <MaterialCommunityIcons name="arrow-right" size={16} color="#fff" />
       </View>
       
       {isWorkoutCompleted && (
         <View style={styles.completedBadge}>
           <MaterialCommunityIcons name="trophy" size={20} color="#FFD700" />
-          <Text style={styles.completedText}>Workout Complete!</Text>
+          <Text style={styles.completedText}>Träning Slutförd!</Text>
           <MaterialCommunityIcons name="fire" size={20} color="#FF6B35" />
         </View>
       )}
-
-      <ExerciseNotes
-        visible={notesModalVisible}
-        onClose={() => setNotesModalVisible(false)}
-        exercise={selectedExercise}
-        onSave={handleExerciseDataSave}
-        initialNotes={selectedExercise ? (exerciseData[selectedExercise.id]?.notes || '') : ''}
-        initialWeight={selectedExercise ? (exerciseData[selectedExercise.id]?.weight || '') : ''}
-      />
-
-      <WorkoutHistory
-        visible={historyModalVisible}
-        onClose={() => setHistoryModalVisible(false)}
-        exerciseId={selectedExerciseId}
-        exerciseData={exerciseData[selectedExerciseId] || {}}
-      />
-    </View>
+    </TouchableOpacity>
   );
 };
 
-const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onExerciseComplete, exerciseData = {}, onExerciseDataUpdate }) => {
-  const [timerActive, setTimerActive] = useState(false);
-  const [currentTimer, setCurrentTimer] = useState(0);
-  const [statsModalVisible, setStatsModalVisible] = useState(false);
-  const [dayStats, setDayStats] = useState({
-    totalWorkoutTime: 0,
-    caloriesBurned: 0,
-    setsCompleted: 0
-  });
+// New MealItem component for timeline integration
+const MealItem = ({ meal, onMealPress, mealProgress, onToggleMealComplete }) => {
+  const isCompleted = mealProgress[meal.id];
+  
+  return (
+    <TouchableOpacity 
+      style={[styles.mealItem, isCompleted && styles.mealItemCompleted]}
+      onPress={() => onMealPress(meal)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.mealContent}>
+        <View style={styles.mealHeader}>
+          <View style={[styles.mealIconContainer, { backgroundColor: meal.color }]}>
+            <MaterialCommunityIcons 
+              name={meal.icon} 
+              size={24} 
+              color="#fff" 
+            />
+          </View>
+          <View style={styles.mealInfo}>
+            <Text style={styles.mealName}>{meal.name}</Text>
+            <Text style={styles.mealTime}>{meal.time}</Text>
+          </View>
+          <View style={styles.mealStats}>
+            <Text style={styles.mealCalories}>{meal.calories}</Text>
+            <Text style={styles.mealCaloriesLabel}>kcal</Text>
+          </View>
+        </View>
+        
+        <View style={styles.mealDetails}>
+          <View style={styles.mealProgress}>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { 
+                    width: isCompleted ? '100%' : '0%',
+                    backgroundColor: meal.color 
+                  }
+                ]} 
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {isCompleted ? 'Completed' : 'Not logged'}
+            </Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.completeButton, isCompleted && styles.completeButtonActive]}
+            onPress={() => onToggleMealComplete(meal.id)}
+          >
+            <MaterialCommunityIcons 
+              name={isCompleted ? "check" : "plus"} 
+              size={16} 
+              color={isCompleted ? "#fff" : "#000"} 
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
-  // Calculate day statistics
-  useEffect(() => {
-    if (selectedDay?.workouts) {
-      const totalSets = selectedDay.workouts.reduce((sum, workout) => 
-        sum + workout.exercises.reduce((exerciseSum, exercise) => 
-          exerciseSum + (workoutProgress[exercise.id] ? exercise.sets : 0), 0
-        ), 0
-      );
-      
-      const estimatedCalories = totalSets * 8; // Rough estimate: 8 calories per set
-      
-      setDayStats({
-        totalWorkoutTime: selectedDay.workouts.reduce((sum, w) => sum + w.duration, 0),
-        caloriesBurned: estimatedCalories,
-        setsCompleted: totalSets
+// New SleepItem component for sleep logging
+const SleepItem = ({ sleep, onSleepPress, sleepProgress, onToggleSleepComplete }) => {
+  const isCompleted = sleepProgress[sleep.id];
+  
+  return (
+    <TouchableOpacity 
+      style={[styles.sleepItem, isCompleted && styles.sleepItemCompleted]}
+      onPress={() => onSleepPress(sleep)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.sleepContent}>
+        <View style={styles.sleepHeader}>
+          <View style={[styles.sleepIconContainer, { backgroundColor: sleep.color }]}>
+            <MaterialCommunityIcons 
+              name={sleep.icon} 
+              size={24} 
+              color="#fff" 
+            />
+          </View>
+          <View style={styles.sleepInfo}>
+            <Text style={styles.sleepName}>{sleep.name}</Text>
+            <Text style={styles.sleepTime}>{sleep.time}</Text>
+          </View>
+          <View style={styles.sleepStats}>
+            <Text style={styles.sleepDuration}>{sleep.duration}</Text>
+            <Text style={styles.sleepDurationLabel}>timmar</Text>
+          </View>
+        </View>
+        
+        <View style={styles.sleepDetails}>
+          <View style={styles.sleepProgress}>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { 
+                    width: isCompleted ? '100%' : '0%',
+                    backgroundColor: sleep.color 
+                  }
+                ]} 
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {isCompleted ? 'Loggad' : 'Inte loggad'}
+            </Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.completeButton, isCompleted && styles.completeButtonActive]}
+            onPress={() => onToggleSleepComplete(sleep.id)}
+          >
+            <MaterialCommunityIcons 
+              name={isCompleted ? "check" : "plus"} 
+              size={16} 
+              color={isCompleted ? "#fff" : "#000"} 
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onExerciseComplete, exerciseData = {}, onExerciseDataUpdate, navigation }) => {
+  const [showNotes, setShowNotes] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedExerciseId, setSelectedExerciseId] = useState(null);
+  const [showAdvancedStats, setShowAdvancedStats] = useState(false);
+  const [activeWorkout, setActiveWorkout] = useState(null);
+  const [workoutStartTime, setWorkoutStartTime] = useState(null);
+  const [restTimer, setRestTimer] = useState({ isActive: false, duration: 0 });
+  const [mealProgress, setMealProgress] = useState({});
+  const [sleepProgress, setSleepProgress] = useState({});
+
+  // Meal data with modern colors
+  const meals = [
+    {
+      id: 'breakfast',
+      name: 'Frukost',
+      time: '08:00',
+      calories: 450,
+      icon: 'coffee',
+      color: '#000',
+    },
+    {
+      id: 'morning-snack',
+      name: 'Mellanmål',
+      time: '10:30',
+      calories: 150,
+      icon: 'apple',
+      color: '#333',
+    },
+    {
+      id: 'lunch',
+      name: 'Lunch',
+      time: '12:30',
+      calories: 650,
+      icon: 'food',
+      color: '#000',
+    },
+    {
+      id: 'afternoon-snack',
+      name: 'Mellanmål',
+      time: '15:00',
+      calories: 200,
+      icon: 'food-apple',
+      color: '#333',
+    },
+    {
+      id: 'dinner',
+      name: 'Middag',
+      time: '18:00',
+      calories: 750,
+      icon: 'silverware-fork-knife',
+      color: '#000',
+    },
+    {
+      id: 'evening-snack',
+      name: 'Kvällsmål',
+      time: '21:00',
+      calories: 250,
+      icon: 'cookie',
+      color: '#333',
+    }
+  ];
+
+  // Sleep data
+  const sleepData = {
+    id: 'sleep',
+    name: 'Sömn',
+    time: '22:30',
+    duration: '8',
+    icon: 'sleep',
+    color: '#4A5568',
+  };
+
+  const handleMealPress = (meal) => {
+    if (navigation) {
+      navigation.navigate('MealSelection', {
+        mealName: meal.name,
+        mealTime: meal.time,
+        selectedDate: selectedDay?.fullDate?.toDateString()
       });
     }
-  }, [workoutProgress, selectedDay]);
+  };
+
+  const handleSleepPress = (sleep) => {
+    // For now, just toggle completion - could navigate to sleep logging screen later
+    toggleSleepComplete(sleep.id);
+  };
+
+  const toggleMealComplete = (mealId) => {
+    setMealProgress(prev => ({
+      ...prev,
+      [mealId]: !prev[mealId]
+    }));
+  };
+
+  const toggleSleepComplete = (sleepId) => {
+    setSleepProgress(prev => ({
+      ...prev,
+      [sleepId]: !prev[sleepId]
+    }));
+  };
+
+  const timeToMinutes = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const createCombinedTimeline = () => {
+    const timeline = [];
+    
+    // Add meals
+    meals.forEach(meal => {
+      timeline.push({
+        type: 'meal',
+        time: meal.time,
+        timeInMinutes: timeToMinutes(meal.time),
+        data: meal
+      });
+    });
+    
+    // Add workouts
+    if (selectedDay?.workouts) {
+      selectedDay.workouts.forEach(workout => {
+        timeline.push({
+          type: 'workout',
+          time: workout.time,
+          timeInMinutes: timeToMinutes(workout.time),
+          data: workout
+        });
+      });
+    }
+    
+    // Add sleep at the end
+    timeline.push({
+      type: 'sleep',
+      time: sleepData.time,
+      timeInMinutes: timeToMinutes(sleepData.time),
+      data: sleepData
+    });
+    
+    // Sort by time
+    return timeline.sort((a, b) => a.timeInMinutes - b.timeInMinutes);
+  };
+
+  const combinedTimeline = createCombinedTimeline();
+  
+  // Calculate meal statistics
+  const totalMealCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
+  const completedMeals = Object.values(mealProgress).filter(Boolean).length;
+  const completedMealCalories = meals
+    .filter(meal => mealProgress[meal.id])
+    .reduce((sum, meal) => sum + meal.calories, 0);
+
+  // Calculate workout statistics
+  const totalWorkouts = selectedDay?.workouts?.length || 0;
+  const completedWorkouts = selectedDay?.workouts?.filter(workout => 
+    workoutProgress[workout.id]
+  ).length || 0;
+
+  // Calculate sleep statistics
+  const isSleepLogged = sleepProgress[sleepData.id] || false;
 
   if (!selectedDay) {
     return (
       <View style={styles.container}>
-        <Text style={styles.sectionTitle}>The Current</Text>
-        <Text style={styles.title}>Day Schedule</Text>
         <View style={styles.emptyState}>
-          <MaterialCommunityIcons name="calendar-clock" size={64} color="#ddd" />
-          <Text style={styles.emptyStateText}>Select a day to view schedule</Text>
-          <Text style={styles.emptyStateSubtext}>Choose any day from the week above</Text>
-        </View>
-        
-        {/* Enhanced workout tips */}
-        <View style={styles.additionalContent}>
-          <Text style={styles.sectionHeader}>Advanced Training Tips</Text>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>💪 Mind-Muscle Connection</Text>
-            <Text style={styles.tipText}>Focus on feeling the target muscle working during each rep. Quality over quantity always wins.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>🔥 Time Under Tension</Text>
-            <Text style={styles.tipText}>Control the eccentric (lowering) phase for 2-3 seconds to maximize muscle growth.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>⏰ Rest Periods</Text>
-            <Text style={styles.tipText}>Compound movements: 2-3 min rest. Isolation exercises: 60-90 seconds rest.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>📈 Progressive Overload</Text>
-            <Text style={styles.tipText}>Increase weight by 2.5-5% when you can complete all sets with perfect form.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>🎯 RPE Scale</Text>
-            <Text style={styles.tipText}>Rate of Perceived Exertion: Aim for RPE 7-8 (2-3 reps in reserve) for optimal gains.</Text>
-          </View>
+          <MaterialCommunityIcons name="calendar-blank" size={64} color="#ccc" />
+          <Text style={styles.emptyStateText}>No day selected</Text>
         </View>
       </View>
     );
   }
-
-  const { workouts } = selectedDay;
-
-  if (selectedDay.isRest) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.sectionTitle}>The Current</Text>
-        <Text style={styles.title}>Day Schedule</Text>
-        <View style={styles.emptyState}>
-          <MaterialCommunityIcons name="sleep" size={64} color="#4CAF50" />
-          <Text style={styles.emptyStateText}>Active Recovery Day</Text>
-          <Text style={styles.emptyStateSubtext}>Your muscles grow during rest!</Text>
-        </View>
-        
-        {/* Enhanced recovery activities */}
-        <View style={styles.additionalContent}>
-          <Text style={styles.sectionHeader}>Recovery Protocol</Text>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>🧘‍♂️ Mobility Work (20-30 min)</Text>
-            <Text style={styles.tipText}>Dynamic stretching, foam rolling, and yoga to improve flexibility and reduce muscle tension.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>🚶‍♂️ Active Recovery (30-45 min)</Text>
-            <Text style={styles.tipText}>Light walking, swimming, or cycling at 50-60% max heart rate to promote blood flow.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>💤 Sleep Optimization</Text>
-            <Text style={styles.tipText}>7-9 hours of quality sleep. Keep room cool (65-68°F) and dark for optimal recovery.</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>🥗 Recovery Nutrition</Text>
-            <Text style={styles.tipText}>Focus on anti-inflammatory foods: berries, fatty fish, leafy greens, and adequate protein (1g per lb bodyweight).</Text>
-          </View>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipTitle}>💧 Hydration & Supplements</Text>
-            <Text style={styles.tipText}>Drink 3-4L water daily. Consider magnesium, vitamin D, and omega-3s for recovery support.</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  // Calculate overall progress for the day
-  const totalExercises = workouts.reduce((sum, workout) => sum + workout.exercises.length, 0);
-  const completedExercises = workouts.reduce((sum, workout) => 
-    sum + workout.exercises.filter(ex => workoutProgress[ex.id]).length, 0
-  );
-  const dayProgress = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.dayHeader}>
-        <View>
-      <Text style={styles.sectionTitle}>The Current</Text>
-      <Text style={styles.title}>Day Schedule</Text>
-        </View>
-        <View style={styles.dayHeaderActions}>
-          <TouchableOpacity 
-            style={styles.analyticsButton}
-            onPress={() => setStatsModalVisible(true)}
-          >
-            <MaterialCommunityIcons name="chart-line" size={20} color="#4CAF50" />
-            <Text style={styles.analyticsButtonText}>Analytics</Text>
-          </TouchableOpacity>
-          <View style={styles.dayProgressContainer}>
-            <Text style={styles.dayProgressText}>{Math.round(dayProgress)}%</Text>
-            <Text style={styles.dayProgressLabel}>Complete</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Enhanced Statistics Dashboard */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <MaterialCommunityIcons name="clock-outline" size={20} color="#4CAF50" />
-          <Text style={styles.statValue}>{dayStats.totalWorkoutTime}</Text>
-          <Text style={styles.statLabel}>min</Text>
-        </View>
-        <View style={styles.statItem}>
-          <MaterialCommunityIcons name="fire" size={20} color="#FF6B35" />
-          <Text style={styles.statValue}>{dayStats.caloriesBurned}</Text>
-          <Text style={styles.statLabel}>cal</Text>
-        </View>
-        <View style={styles.statItem}>
-          <MaterialCommunityIcons name="weight-lifter" size={20} color="#2196F3" />
-          <Text style={styles.statValue}>{dayStats.setsCompleted}</Text>
-          <Text style={styles.statLabel}>sets</Text>
-        </View>
-        <View style={styles.statItem}>
-          <MaterialCommunityIcons name="target" size={20} color="#9C27B0" />
-          <Text style={styles.statValue}>{completedExercises}</Text>
-          <Text style={styles.statLabel}>exercises</Text>
-        </View>
-      </View>
-      
-      <View style={styles.timeline}>
-        {workouts.map((workout, index) => (
-          <View key={workout.id} style={styles.timeBlock}>
-            <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>{workout.time}</Text>
-              <View style={styles.timeLine} />
+      {/* Modern Statistics Dashboard */}
+      <View style={styles.modernStatsContainer}>
+        <View style={styles.statsCard}>
+          <View style={styles.statItem}>
+            <View style={styles.statHeader}>
+              <MaterialCommunityIcons name="dumbbell" size={20} color="#000" />
+              <Text style={styles.statTitle}>Workouts</Text>
             </View>
-            <View style={styles.workoutContainer}>
-            <ExerciseGroup
-                workout={workout}
-                workoutProgress={workoutProgress}
-                onExerciseComplete={onExerciseComplete}
-                onWorkoutComplete={onWorkoutComplete}
-                exerciseData={exerciseData}
-                onExerciseDataUpdate={onExerciseDataUpdate}
+            <Text style={styles.statValue}>{completedWorkouts}/{totalWorkouts}</Text>
+            <View style={styles.statProgressBar}>
+              <View 
+                style={[
+                  styles.statProgressFill, 
+                  { 
+                    width: totalWorkouts > 0 ? `${(completedWorkouts / totalWorkouts) * 100}%` : '0%',
+                    backgroundColor: '#000'
+                  }
+                ]} 
               />
             </View>
           </View>
-        ))}
+          
+          <View style={styles.statDivider} />
+          
+          <View style={styles.statItem}>
+            <View style={styles.statHeader}>
+              <MaterialCommunityIcons name="food" size={20} color="#000" />
+              <Text style={styles.statTitle}>Meals</Text>
+            </View>
+            <Text style={styles.statValue}>{completedMeals}/{meals.length}</Text>
+            <View style={styles.statProgressBar}>
+              <View 
+                style={[
+                  styles.statProgressFill, 
+                  { 
+                    width: `${(completedMeals / meals.length) * 100}%`,
+                    backgroundColor: '#000'
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+          
+          <View style={styles.statDivider} />
+          
+          <View style={styles.statItem}>
+            <View style={styles.statHeader}>
+              <MaterialCommunityIcons name="sleep" size={20} color="#000" />
+              <Text style={styles.statTitle}>Sömn</Text>
+            </View>
+            <Text style={styles.statValue}>{isSleepLogged ? '1/1' : '0/1'}</Text>
+            <View style={styles.statProgressBar}>
+              <View 
+                style={[
+                  styles.statProgressFill, 
+                  { 
+                    width: isSleepLogged ? '100%' : '0%',
+                    backgroundColor: '#000'
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+        </View>
       </View>
-      
-      {/* Enhanced workout notes and tips */}
-      <View style={styles.additionalContent}>
-        <Text style={styles.sectionHeader}>Advanced Training Notes</Text>
-        <View style={styles.noteCard}>
-          <Text style={styles.noteTitle}>🎯 Technique Focus</Text>
-          <Text style={styles.noteText}>• Maintain neutral spine throughout all movements</Text>
-          <Text style={styles.noteText}>• Engage core before initiating each rep</Text>
-          <Text style={styles.noteText}>• Full range of motion unless contraindicated</Text>
-          <Text style={styles.noteText}>• Control tempo: 2-1-2-1 (eccentric-pause-concentric-pause)</Text>
-        </View>
-        
-        <View style={styles.noteCard}>
-          <Text style={styles.noteTitle}>📊 Performance Tracking</Text>
-          <Text style={styles.noteText}>• Log weight, reps, and RPE for each set</Text>
-          <Text style={styles.noteText}>• Note any form breakdowns or compensations</Text>
-          <Text style={styles.noteText}>• Track energy levels and motivation (1-10 scale)</Text>
-          <Text style={styles.noteText}>• Record any pain or discomfort immediately</Text>
-        </View>
-        
-        <View style={styles.noteCard}>
-          <Text style={styles.noteTitle}>🔄 Progression Strategy</Text>
-          <Text style={styles.noteText}>• Week 1-2: Focus on form and movement patterns</Text>
-          <Text style={styles.noteText}>• Week 3-4: Increase load by 5-10% if form is perfect</Text>
-          <Text style={styles.noteText}>• Week 5-6: Add volume (extra set) or intensity techniques</Text>
-          <Text style={styles.noteText}>• Week 7: Deload week (reduce volume by 40-50%)</Text>
-        </View>
 
-        <View style={styles.noteCard}>
-          <Text style={styles.noteTitle}>⚡ Intensity Techniques</Text>
-          <Text style={styles.noteText}>• Drop sets: Reduce weight by 20-30% and continue</Text>
-          <Text style={styles.noteText}>• Rest-pause: Rest 10-15 seconds, then continue set</Text>
-          <Text style={styles.noteText}>• Tempo manipulation: Slow eccentrics (3-5 seconds)</Text>
-          <Text style={styles.noteText}>• Cluster sets: Break one set into mini-sets with short rest</Text>
-        </View>
-      </View>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {selectedDay.isRest && (!selectedDay.workouts || selectedDay.workouts.length === 0) ? (
+          <View style={styles.restDayContainer}>
+            <View style={styles.restDayHeader}>
+              <MaterialCommunityIcons name="sleep" size={48} color="#000" />
+              <Text style={styles.restDayTitle}>Rest Day</Text>
+              <Text style={styles.restDaySubtitle}>Focus on recovery and nutrition</Text>
+            </View>
+            
+            {/* Show meals timeline for rest days */}
+            <View style={styles.timelineContainer}>
+              <View style={styles.compactTimeline}>
+                {combinedTimeline.map((item, index) => (
+                  <View key={`${item.type}-${item.data.id || item.data.name}`} style={styles.timelineItem}>
+                    <View style={styles.compactTimeContainer}>
+                      <Text style={styles.compactTimeText}>{item.time}</Text>
+                    </View>
+                    
+                    <View style={styles.compactTimelineLine}>
+                      <View style={[styles.compactTimelineDot, { backgroundColor: item.data.color || '#000' }]} />
+                      {index < combinedTimeline.length - 1 && <View style={styles.compactTimelineConnector} />}
+                    </View>
+                    
+                    <View style={styles.compactItemContainer}>
+                      {item.type === 'meal' ? (
+                        <MealItem 
+                          meal={item.data}
+                          onMealPress={handleMealPress}
+                          mealProgress={mealProgress}
+                          onToggleMealComplete={toggleMealComplete}
+                        />
+                      ) : item.type === 'sleep' ? (
+                        <SleepItem 
+                          sleep={item.data}
+                          onSleepPress={handleSleepPress}
+                          sleepProgress={sleepProgress}
+                          onToggleSleepComplete={toggleSleepComplete}
+                        />
+                      ) : (
+                        <ExerciseGroup
+                          workout={item.data}
+                          workoutProgress={workoutProgress}
+                          onExerciseComplete={onExerciseComplete}
+                          onWorkoutComplete={onWorkoutComplete}
+                          exerciseData={exerciseData}
+                          onExerciseDataUpdate={onExerciseDataUpdate}
+                          navigation={navigation}
+                          selectedDate={selectedDay?.fullDate?.toDateString()}
+                        />
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.timelineContainer}>
+            <View style={styles.compactTimeline}>
+              {combinedTimeline.map((item, index) => (
+                <View key={`${item.type}-${item.data.id || item.data.name}`} style={styles.timelineItem}>
+                  <View style={styles.compactTimeContainer}>
+                    <Text style={styles.compactTimeText}>{item.time}</Text>
+                  </View>
+                  
+                  <View style={styles.compactTimelineLine}>
+                    <View style={[styles.compactTimelineDot, { backgroundColor: item.data.color || '#000' }]} />
+                    {index < combinedTimeline.length - 1 && <View style={styles.compactTimelineConnector} />}
+                  </View>
+                  
+                  <View style={styles.compactItemContainer}>
+                    {item.type === 'meal' ? (
+                      <MealItem 
+                        meal={item.data}
+                        onMealPress={handleMealPress}
+                        mealProgress={mealProgress}
+                        onToggleMealComplete={toggleMealComplete}
+                      />
+                    ) : item.type === 'sleep' ? (
+                      <SleepItem 
+                        sleep={item.data}
+                        onSleepPress={handleSleepPress}
+                        sleepProgress={sleepProgress}
+                        onToggleSleepComplete={toggleSleepComplete}
+                      />
+                    ) : (
+                      <ExerciseGroup
+                        workout={item.data}
+                        workoutProgress={workoutProgress}
+                        onExerciseComplete={onExerciseComplete}
+                        onWorkoutComplete={onWorkoutComplete}
+                        exerciseData={exerciseData}
+                        onExerciseDataUpdate={onExerciseDataUpdate}
+                        navigation={navigation}
+                        selectedDate={selectedDay?.fullDate?.toDateString()}
+                      />
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Modals */}
+      <ExerciseNotes
+        visible={showNotes}
+        onClose={() => setShowNotes(false)}
+        exercise={selectedExercise}
+        onSave={(notes, weight) => {
+          if (selectedExercise) {
+            onExerciseDataUpdate(selectedExercise.id, { notes, weight });
+          }
+        }}
+        initialNotes={selectedExercise ? exerciseData[selectedExercise.id]?.notes || '' : ''}
+        initialWeight={selectedExercise ? exerciseData[selectedExercise.id]?.weight || '' : ''}
+      />
+
+      <WorkoutHistory
+        visible={showHistory}
+        onClose={() => setShowHistory(false)}
+        exerciseId={selectedExerciseId}
+        exerciseData={exerciseData}
+      />
 
       <AdvancedStats
-        visible={statsModalVisible}
-        onClose={() => setStatsModalVisible(false)}
-        dayStats={dayStats}
-        weeklyProgress={[]}
+        visible={showAdvancedStats}
+        onClose={() => setShowAdvancedStats(false)}
+        dayStats={{
+          totalWorkouts,
+          completedWorkouts,
+          totalExercises: selectedDay?.workouts?.reduce((sum, w) => sum + w.exercises.length, 0) || 0,
+          completedExercises: Object.keys(workoutProgress).filter(key => 
+            !key.includes('-') && workoutProgress[key]
+          ).length
+        }}
+        weeklyProgress={[65, 80, 45, 90, 75, 60, 85]}
+      />
+
+      <RestTimer
+        isActive={restTimer.isActive}
+        duration={restTimer.duration}
+        onComplete={() => setRestTimer({ isActive: false, duration: 0 })}
+        onStop={() => setRestTimer({ isActive: false, duration: 0 })}
+      />
+
+      <WorkoutTimer
+        isActive={activeWorkout !== null}
+        onStop={() => {
+          setActiveWorkout(null);
+          setWorkoutStartTime(null);
+        }}
+        startTime={workoutStartTime}
       />
     </View>
   );
@@ -735,128 +938,257 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  dayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  dayHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  analyticsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  analyticsButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  dayProgressContainer: {
-    alignItems: 'center',
+    flex: 1,
     backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 12,
-    minWidth: 80,
   },
-  dayProgressText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
+  
+  // Modern Statistics Dashboard
+  modernStatsContainer: {
+    paddingHorizontal: 12,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
-  dayProgressLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  // Enhanced Statistics Dashboard
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  statsCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 20,
+    flexDirection: 'row',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   statItem: {
-    alignItems: 'center',
     flex: 1,
+    alignItems: 'center',
+  },
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 4,
+  },
+  statTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+    letterSpacing: -0.1,
   },
   statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#000',
-    marginTop: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
-  statLabel: {
+  statProgressBar: {
+    width: '100%',
+    height: 3,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  statProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 12,
+  },
+
+  // Compact Timeline
+  timelineContainer: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  compactTimeline: {
+    flex: 1,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  compactTimeContainer: {
+    width: 35,
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  compactTimeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#000',
+    letterSpacing: -0.3,
+  },
+  compactTimelineLine: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 20,
+  },
+  compactTimelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 2,
+  },
+  compactTimelineConnector: {
+    width: 1,
+    height: 60,
+    backgroundColor: '#e9ecef',
+    marginTop: 8,
+  },
+  compactItemContainer: {
+    flex: 1,
+  },
+
+  // Modern Meal Items
+  mealItem: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
+  },
+  mealItemCompleted: {
+    borderColor: '#000',
+    borderWidth: 2,
+  },
+  mealContent: {
+    gap: 16,
+  },
+  mealHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  mealIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mealInfo: {
+    flex: 1,
+  },
+  mealName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  mealTime: {
     fontSize: 12,
     color: '#666',
+    fontWeight: '500',
+  },
+  mealStats: {
+    alignItems: 'flex-end',
+  },
+  mealCalories: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#000',
+    letterSpacing: -0.5,
+  },
+  mealCaloriesLabel: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '500',
     marginTop: 2,
   },
-  timeline: {
-    paddingTop: 16,
-  },
-  timeBlock: {
+  mealDetails: {
     flexDirection: 'row',
-    marginBottom: 24,
-  },
-  timeContainer: {
     alignItems: 'center',
-    marginRight: 16,
-    width: 60,
+    justifyContent: 'space-between',
   },
-  timeText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
+  mealProgress: {
+    flex: 1,
+    marginRight: 16,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 3,
+    overflow: 'hidden',
     marginBottom: 8,
   },
-  timeLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 1,
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
   },
-  workoutContainer: {
-    flex: 1,
+  progressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
   },
-  exerciseGroup: {
-    backgroundColor: '#f5f5f5',
+  completeButton: {
+    width: 36,
+    height: 36,
     borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#e9ecef',
+  },
+  completeButtonActive: {
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+
+  // Rest Day Styling
+  restDayContainer: {
+    flex: 1,
+    paddingTop: 20,
+  },
+  restDayHeader: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+  restDayTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#000',
+    marginTop: 16,
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  restDaySubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  // Exercise Group Styles
+  exerciseGroup: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
   },
   exerciseGroupCompleted: {
-    backgroundColor: '#e8f5e8',
-    borderColor: '#4CAF50',
+    borderColor: '#000',
+    borderWidth: 2,
   },
   groupHeader: {
     marginBottom: 16,
@@ -869,7 +1201,9 @@ const styles = StyleSheet.create({
   },
   groupTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#000',
+    letterSpacing: -0.3,
   },
   groupMetrics: {
     alignItems: 'flex-end',
@@ -877,15 +1211,17 @@ const styles = StyleSheet.create({
   groupDuration: {
     fontSize: 14,
     color: '#666',
-    backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     marginBottom: 4,
+    fontWeight: '600',
   },
   exerciseCount: {
     fontSize: 12,
-    color: '#999',
+    color: '#666',
+    fontWeight: '500',
   },
   volumeText: {
     fontSize: 10,
@@ -899,13 +1235,13 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 6,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#f0f0f0',
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#000',
     borderRadius: 3,
   },
   progressText: {
@@ -914,70 +1250,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 30,
   },
-  // Timer Styles
-  workoutTimer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e8',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-    gap: 8,
-  },
-  workoutTimerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4CAF50',
-    flex: 1,
-  },
-  stopWorkoutButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  stopWorkoutText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  restTimer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff3e0',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-    gap: 8,
-  },
-  restTimerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FF6B35',
-    flex: 1,
-  },
-  stopTimerButton: {
-    padding: 4,
-  },
+
+  // Exercise Item Styles
   exerciseList: {
-    gap: 8,
+    gap: 12,
   },
   exerciseItem: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#e9ecef',
   },
   exerciseItemCompleted: {
-    backgroundColor: '#f0f8f0',
-    borderColor: '#4CAF50',
+    backgroundColor: '#000',
+    borderColor: '#000',
   },
   exerciseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   exerciseNameContainer: {
     flex: 1,
@@ -989,33 +1282,38 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#000',
   },
   exerciseNameCompleted: {
-    color: '#4CAF50',
-    textDecorationLine: 'line-through',
+    color: '#fff',
   },
   weightRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   exerciseWeight: {
     fontSize: 12,
-    color: '#2196F3',
+    color: '#000',
     fontWeight: '600',
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   lastWeight: {
     fontSize: 10,
-    color: '#999',
+    color: '#666',
   },
   exerciseDetails: {
     fontSize: 14,
     color: '#666',
+    fontWeight: '500',
   },
   exerciseDetailsCompleted: {
-    color: '#4CAF50',
+    color: '#fff',
   },
   exerciseNotes: {
     fontSize: 12,
@@ -1029,37 +1327,88 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   historyButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
   },
   checkBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
   },
   checkBoxCompleted: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#000',
+    borderColor: '#000',
   },
+
+  // Timer Styles
+  workoutTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  workoutTimerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    flex: 1,
+  },
+  stopWorkoutButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  stopWorkoutText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  restTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  restTimerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    flex: 1,
+  },
+  stopTimerButton: {
+    padding: 4,
+  },
+
+  // Completed Badge
   completedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
-    padding: 8,
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#000',
+    borderRadius: 12,
     gap: 8,
   },
   completedText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#fff',
   },
+
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -1069,45 +1418,54 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     width: '90%',
     maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    letterSpacing: -0.3,
   },
   inputSection: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
-    color: '#333',
+    color: '#000',
   },
   weightInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#e9ecef',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
+    backgroundColor: '#f8f9fa',
   },
   notesInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#e9ecef',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
     height: 100,
     textAlignVertical: 'top',
+    backgroundColor: '#f8f9fa',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1115,34 +1473,42 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
   },
   cancelButtonText: {
     color: '#666',
     fontWeight: '600',
+    fontSize: 16,
   },
   saveButton: {
     flex: 1,
-    backgroundColor: '#4CAF50',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#000',
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
   },
   saveButtonText: {
     color: '#fff',
     fontWeight: '600',
+    fontSize: 16,
   },
+
   // History Modal Styles
   historyModalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     width: '95%',
     maxWidth: 500,
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   historyList: {
     maxHeight: 400,
@@ -1155,6 +1521,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 12,
+    fontWeight: '500',
   },
   emptyHistorySubtext: {
     fontSize: 14,
@@ -1165,9 +1532,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
   },
   historyDate: {
     flex: 1,
@@ -1180,6 +1547,7 @@ const styles = StyleSheet.create({
   historyTimeText: {
     fontSize: 12,
     color: '#666',
+    marginTop: 2,
   },
   historyData: {
     alignItems: 'center',
@@ -1187,29 +1555,40 @@ const styles = StyleSheet.create({
   },
   historyWeight: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2196F3',
+    fontWeight: '700',
+    color: '#000',
   },
   historyReps: {
     fontSize: 12,
     color: '#666',
+    marginTop: 2,
   },
   historyRPE: {
     alignItems: 'center',
   },
   historyRPEText: {
     fontSize: 12,
-    color: '#FF6B35',
+    color: '#000',
     fontWeight: '600',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
+
   // Stats Modal Styles
   statsModalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     width: '95%',
     maxWidth: 500,
     maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   statsContent: {
     maxHeight: 500,
@@ -1218,10 +1597,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   statsSectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     marginBottom: 16,
     color: '#000',
+    letterSpacing: -0.3,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -1232,20 +1612,22 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '45%',
     backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
   },
   metricValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#000',
     marginTop: 8,
+    letterSpacing: -0.5,
   },
   metricLabel: {
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+    fontWeight: '500',
   },
   progressChart: {
     flexDirection: 'row',
@@ -1253,8 +1635,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     height: 120,
     backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
   },
   chartBar: {
     flex: 1,
@@ -1264,13 +1646,14 @@ const styles = StyleSheet.create({
   },
   chartBarFill: {
     width: 20,
-    backgroundColor: '#4CAF50',
-    borderRadius: 2,
+    backgroundColor: '#000',
+    borderRadius: 4,
     marginBottom: 8,
   },
   chartBarLabel: {
     fontSize: 10,
     color: '#666',
+    fontWeight: '500',
   },
   achievementsList: {
     gap: 12,
@@ -1279,8 +1662,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     gap: 12,
   },
   achievementText: {
@@ -1288,74 +1671,132 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '500',
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
   emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
+    paddingHorizontal: 40,
   },
   emptyStateText: {
     fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
     color: '#999',
+    marginTop: 16,
+    textAlign: 'center',
   },
-  additionalContent: {
-    marginTop: 32,
-  },
-  sectionHeader: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  exercisePreview: {
     marginBottom: 16,
+  },
+  exercisePreviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#000',
-  },
-  tipCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-  },
-  tipTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
     marginBottom: 8,
-    color: '#000',
+    letterSpacing: -0.2,
   },
-  tipText: {
-    fontSize: 14,
+  exercisePreviewItem: {
+    fontSize: 13,
     color: '#666',
-    lineHeight: 20,
+    marginBottom: 4,
+    fontWeight: '500',
   },
-  noteCard: {
-    backgroundColor: '#fff',
+  exercisePreviewMore: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  startWorkoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    gap: 8,
+    marginTop: 8,
   },
-  noteTitle: {
+  startWorkoutText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  sleepItem: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
+  },
+  sleepItemCompleted: {
+    borderColor: '#000',
+    borderWidth: 2,
+  },
+  sleepContent: {
+    gap: 16,
+  },
+  sleepHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  sleepIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sleepInfo: {
+    flex: 1,
+  },
+  sleepName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  sleepTime: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  sleepStats: {
+    alignItems: 'flex-end',
+  },
+  sleepDuration: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#000',
   },
-  noteText: {
-    fontSize: 14,
+  sleepDurationLabel: {
+    fontSize: 12,
     color: '#666',
-    lineHeight: 20,
-    marginBottom: 4,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  sleepDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sleepProgress: {
+    flex: 1,
+    marginRight: 16,
   },
 });
 
