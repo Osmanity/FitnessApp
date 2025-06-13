@@ -16,6 +16,8 @@ import Animated, {
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import WeekSchedule from '../components/WeekSchedule';
 import DaySchedule from '../components/DaySchedule';
+import CustomAlert from '../components/CustomAlert';
+import { useCustomAlert } from '../hooks/useCustomAlert';
 
 // Helper function to find today's date data
 const findTodaysData = () => {
@@ -377,6 +379,15 @@ const PlansScreen = ({ navigation }) => {
   const scrollY = useSharedValue(0);
   const quickActionsHeight = useSharedValue(0);
 
+  // Custom Alert Hook
+  const {
+    alertVisible,
+    alertConfig,
+    hideAlert,
+    showCelebration,
+    showSuccess
+  } = useCustomAlert();
+
   // Auto-select today's date on component mount
   useEffect(() => {
     const todaysData = findTodaysData();
@@ -463,7 +474,7 @@ const PlansScreen = ({ navigation }) => {
       ?.find(w => w.id === workoutId)
       ?.exercises?.length || 0;
 
-    Alert.alert(
+    showCelebration(
       '🎉 Workout Complete!',
       `Amazing work! You completed ${completedExercises}/${totalExercises} exercises.\n\n💪 Keep up the great momentum!`,
       [
@@ -503,7 +514,7 @@ const PlansScreen = ({ navigation }) => {
       const randomMessage = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
       
       setTimeout(() => {
-        Alert.alert('Nice Work!', randomMessage, [{ text: 'Thanks!', style: 'default' }]);
+        showSuccess('Nice Work!', randomMessage, [{ text: 'Thanks!', style: 'default' }]);
       }, 500);
     }
   };
@@ -884,10 +895,7 @@ const PlansScreen = ({ navigation }) => {
     return {
       workouts: `${completedWorkouts}/${totalWorkouts}`,
       meals: `${completedMeals}/${totalMeals}`,
-      sleep: `${sleepLogged}/1`,
-      workoutProgress: totalWorkouts > 0 ? (completedWorkouts / totalWorkouts) * 100 : 0,
-      mealProgress: (completedMeals / totalMeals) * 100,
-      sleepProgress: sleepLogged * 100
+      sleep: `${sleepLogged}/1`
     };
   };
 
@@ -952,6 +960,14 @@ const PlansScreen = ({ navigation }) => {
           >
             <MaterialCommunityIcons name="dumbbell" size={24} color="#FF6B35" />
             <Text style={styles.actionText}>Templates</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('PhotoProgress')}
+          >
+            <MaterialCommunityIcons name="camera" size={24} color="#9C27B0" />
+            <Text style={styles.actionText}>Photos</Text>
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -1109,6 +1125,15 @@ const PlansScreen = ({ navigation }) => {
           </View>
         </Animated.View>
       </Animated.ScrollView>
+      
+      <CustomAlert
+        visible={alertVisible}
+        onClose={hideAlert}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        type={alertConfig.type}
+      />
     </SafeAreaView>
   );
 };

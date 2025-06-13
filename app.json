@@ -22,14 +22,23 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "jsEngine": "jsc"
+      "jsEngine": "jsc",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to take progress photos of your fitness journey.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to save progress photos."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "jsEngine": "jsc"
+      "jsEngine": "jsc",
+      "permissions": [
+        "CAMERA",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -37,7 +46,17 @@
     "plugins": [
       "expo-font",
       "expo-asset",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-image-picker",
+      "expo-media-library",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "This app uses the camera to take progress photos of your fitness journey.",
+          "microphonePermission": "This app may use the microphone for video recording.",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }

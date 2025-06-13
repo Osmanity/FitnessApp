@@ -417,7 +417,7 @@ const MealItem = ({ meal, onMealPress, mealProgress, onToggleMealComplete }) => 
     >
       <View style={styles.mealContent}>
         <View style={styles.mealHeader}>
-          <View style={[styles.mealIconContainer, { backgroundColor: meal.color }]}>
+          <View style={[styles.mealIconContainer, { backgroundColor: isCompleted ? '#000' : meal.color }]}>
             <MaterialCommunityIcons 
               name={meal.icon} 
               size={24} 
@@ -442,7 +442,7 @@ const MealItem = ({ meal, onMealPress, mealProgress, onToggleMealComplete }) => 
                   styles.progressFill, 
                   { 
                     width: isCompleted ? '100%' : '0%',
-                    backgroundColor: meal.color 
+                    backgroundColor: isCompleted ? '#000' : meal.color 
                   }
                 ]} 
               />
@@ -480,7 +480,7 @@ const SleepItem = ({ sleep, onSleepPress, sleepProgress, onToggleSleepComplete }
     >
       <View style={styles.sleepContent}>
         <View style={styles.sleepHeader}>
-          <View style={[styles.sleepIconContainer, { backgroundColor: sleep.color }]}>
+          <View style={[styles.sleepIconContainer, { backgroundColor: isCompleted ? '#000' : sleep.color }]}>
             <MaterialCommunityIcons 
               name={sleep.icon} 
               size={24} 
@@ -505,7 +505,7 @@ const SleepItem = ({ sleep, onSleepPress, sleepProgress, onToggleSleepComplete }
                   styles.progressFill, 
                   { 
                     width: isCompleted ? '100%' : '0%',
-                    backgroundColor: sleep.color 
+                    backgroundColor: isCompleted ? '#000' : sleep.color 
                   }
                 ]} 
               />
@@ -525,6 +525,53 @@ const SleepItem = ({ sleep, onSleepPress, sleepProgress, onToggleSleepComplete }
               color={isCompleted ? "#fff" : "#000"} 
             />
           </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// New PhotoItem component for progress photos
+const PhotoItem = ({ photo, onPhotoPress }) => {
+  return (
+    <TouchableOpacity 
+      style={styles.photoItem}
+      onPress={() => onPhotoPress(photo)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.photoContent}>
+        <View style={styles.photoHeader}>
+          <View style={[styles.photoIconContainer, { backgroundColor: '#333' }]}>
+            <MaterialCommunityIcons 
+              name={photo.icon} 
+              size={24} 
+              color="#fff" 
+            />
+          </View>
+          <View style={styles.photoInfo}>
+            <Text style={styles.photoName}>{photo.name}</Text>
+            <Text style={styles.photoTime}>{photo.time}</Text>
+          </View>
+          <View style={styles.photoStats}>
+            <Text style={styles.photoCount}>{photo.count}</Text>
+            <Text style={styles.photoCountLabel}>foton</Text>
+          </View>
+        </View>
+        
+        <View style={styles.photoDetails}>
+          <View style={styles.photoProgress}>
+            <Text style={styles.progressText}>
+              Tryck för att ta progress foton
+            </Text>
+          </View>
+          
+          <View style={styles.photoButton}>
+            <MaterialCommunityIcons 
+              name="camera" 
+              size={16} 
+              color="#000" 
+            />
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -551,7 +598,7 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
       time: '08:00',
       calories: 450,
       icon: 'coffee',
-      color: '#000',
+      color: '#333',
     },
     {
       id: 'morning-snack',
@@ -567,7 +614,7 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
       time: '12:30',
       calories: 650,
       icon: 'food',
-      color: '#000',
+      color: '#333',
     },
     {
       id: 'afternoon-snack',
@@ -583,7 +630,7 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
       time: '18:00',
       calories: 750,
       icon: 'silverware-fork-knife',
-      color: '#000',
+      color: '#333',
     },
     {
       id: 'evening-snack',
@@ -602,7 +649,7 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
     time: '22:30',
     duration: '8',
     icon: 'sleep',
-    color: '#4A5568',
+    color: '#333',
   };
 
   const handleMealPress = (meal) => {
@@ -618,6 +665,14 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
   const handleSleepPress = (sleep) => {
     // For now, just toggle completion - could navigate to sleep logging screen later
     toggleSleepComplete(sleep.id);
+  };
+
+  const handlePhotoPress = (photo) => {
+    if (navigation) {
+      navigation.navigate('PhotoProgress', {
+        selectedDate: selectedDay?.fullDate?.toDateString()
+      });
+    }
   };
 
   const toggleMealComplete = (mealId) => {
@@ -654,7 +709,7 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
     
     // Add workouts
     if (selectedDay?.workouts) {
-      selectedDay.workouts.forEach(workout => {
+      selectedDay.workouts.forEach((workout, index) => {
         timeline.push({
           type: 'workout',
           time: workout.time,
@@ -663,6 +718,21 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
         });
       });
     }
+    
+    // Add one photo card per day (before sleep)
+    timeline.push({
+      type: 'photo',
+      time: '21:30',
+      timeInMinutes: timeToMinutes('21:30'),
+      data: {
+        id: 'daily-photo',
+        name: 'Progress Foton',
+        time: '21:30',
+        count: '8',
+        icon: 'camera',
+        color: '#333'
+      }
+    });
     
     // Add sleep at the end
     timeline.push({
@@ -815,6 +885,11 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
                           sleepProgress={sleepProgress}
                           onToggleSleepComplete={toggleSleepComplete}
                         />
+                      ) : item.type === 'photo' ? (
+                        <PhotoItem 
+                          photo={item.data}
+                          onPhotoPress={handlePhotoPress}
+                        />
                       ) : (
                         <ExerciseGroup
                           workout={item.data}
@@ -861,6 +936,11 @@ const DaySchedule = ({ selectedDay, workoutProgress = {}, onWorkoutComplete, onE
                         onSleepPress={handleSleepPress}
                         sleepProgress={sleepProgress}
                         onToggleSleepComplete={toggleSleepComplete}
+                      />
+                    ) : item.type === 'photo' ? (
+                      <PhotoItem 
+                        photo={item.data}
+                        onPhotoPress={handlePhotoPress}
                       />
                     ) : (
                       <ExerciseGroup
@@ -1797,6 +1877,83 @@ const styles = StyleSheet.create({
   sleepProgress: {
     flex: 1,
     marginRight: 16,
+  },
+  photoItem: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
+  },
+  photoContent: {
+    gap: 16,
+  },
+  photoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  photoIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoInfo: {
+    flex: 1,
+  },
+  photoName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  photoTime: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  photoStats: {
+    alignItems: 'flex-end',
+  },
+  photoCount: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#000',
+    letterSpacing: -0.5,
+  },
+  photoCountLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  photoDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  photoProgress: {
+    flex: 1,
+    marginRight: 16,
+  },
+  photoButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#e9ecef',
   },
 });
 
